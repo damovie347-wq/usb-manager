@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- guvenli alan icinde (yaklasik orta 66dp) basit USB bellek sekli -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M39,42 L69,42 L69,80 C69,84.4 65.4,88 61,88 L47,88 C42.6,88 39,84.4 39,80 Z" />
+    <path android:fillColor="#2F6FE4"
+        android:pathData="M45,20 L63,20 L63,42 L45,42 Z" />
+    <path android:fillColor="#0E1A2B"
+        android:pathData="M50,54 L58,54 L58,64 L50,64 Z" />
+</vector>

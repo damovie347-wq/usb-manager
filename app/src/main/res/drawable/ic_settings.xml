@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <!-- basitlestirilmis disli (gear) sekli: sekizgen govde + ortada delik (evenOdd) -->
+    <path android:fillColor="#B0BEC5" android:fillType="evenOdd"
+        android:pathData="
+            M9,3 L15,3 L16,6 L19,7.5 L21,10.5 L19.5,13.5 L21,16.5 L19,19.5 L16,21 L15,21 L9,21 L8,19.5 L5,18 L3,15 L4.5,12 L3,9 L5,6 L8,4.5 Z
+            M12,9 a3,3 0 1,0 0.01,0 z" />
+</vector>
