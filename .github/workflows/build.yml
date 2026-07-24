@@ -1,1 +1,54 @@
+name: Android CI/CD - USB Manager APK
 
+# Push'ta veya elle (workflow_dispatch) tetiklenir.
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1) Kaynak kodu indir (checkout)
+        uses: actions/checkout@v4
+
+      - name: 2) JDK 17 kurulumu
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 3) Android SDK kurulumu / doğrulama
+        uses: android-actions/setup-android@v3
+
+      - name: 4) Gradle Wrapper'ı üret
+        # Not: Elle oluşturulmuş / kopyalanmış gradle-wrapper.jar dosyaları CI'da
+        # sıkça bozuk çıkar. Bunun yerine wrapper'ı doğrudan runner üzerinde,
+        # resmi Gradle "wrapper" görevi ile üretiyoruz. Bu şekilde repo %100
+        # metin tabanlı kalır ve "invalid/corrupt wrapper jar" hataları oluşmaz.
+        run: gradle wrapper --gradle-version 8.7
+
+      - name: 5) gradlew çalıştırma izni ver
+        run: chmod +x ./gradlew
+
+      - name: 6) Bağımlılıkları önbelleğe al
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: 7) Debug APK derle (assembleDebug)
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: 8) APK'yı Artifacts'e yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: USB-Manager-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
