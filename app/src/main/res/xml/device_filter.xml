@@ -1,1 +1,12 @@
-
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Tum USB cihazlarini yakala (bos usb-device = herhangi bir vendor/product).
+        Gercek Mass-Storage sinif filtrelemesi KOD tarafinda yapilir, cunku
+        cogu USB bellek, CIHAZ seviyesinde class=0 (composite) bildirir;
+        gercek Mass Storage sinifi (8) genellikle INTERFACE seviyesindedir
+        ve manifest filtresi interface sinifini suzemez.
+        Bkz: MainActivity.handleUsbAttachIntent()
+    -->
+    <usb-device />
+</resources>

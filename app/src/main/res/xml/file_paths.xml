@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+        "Birlikte Ac" (VLC/MX Player vb.) icin: USB'den okunan medya dosyasi
+        once uygulamanin ONBELLEK klasorune kopyalanir, sonra bu klasor
+        FileProvider ile GUVENLI (content://) bir Uri olarak disariya acilir.
+        Boylece harici uygulamalar, uygulamanin gercek dosya yolunu gormeden
+        sadece izin verilen gecici kopyaya erisir.
+    -->
+    <cache-path name="shared_media" path="shared/" />
+</paths>
