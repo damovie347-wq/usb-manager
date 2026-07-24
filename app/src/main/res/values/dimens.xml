@@ -1,0 +1,13 @@
+<resources>
+    <!--
+        Responsive / Tablet uyumu icin ortak deger: icerik karti maksimum
+        genislikte tutulur ve ConstraintLayout'ta yatayda ortalanir. Boylece
+        Galaxy Tab S9 gibi genis ekranlarda icerik kenara yapismaz / asiri
+        gerilmez; Galaxy S10+ gibi kucuk ekranlarda ise match_parent gibi
+        davranir (genislik zaten bu degerin altinda kalir).
+    -->
+    <dimen name="content_max_width">680dp</dimen>
+    <dimen name="screen_padding">16dp</dimen>
+    <dimen name="card_radius">16dp</dimen>
+    <dimen name="card_elevation">2dp</dimen>
+</resources>

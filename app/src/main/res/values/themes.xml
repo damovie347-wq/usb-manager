@@ -1,0 +1,42 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Varsayilan tema: gunduz (Light) gorunumu -->
+    <style name="Theme.UsbManager" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/brand_blue</item>
+        <item name="colorPrimaryVariant">@color/brand_blue_dark</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/brand_orange</item>
+        <item name="colorOnSecondary">@color/black_pure</item>
+        <item name="colorSurface">@color/surface_light</item>
+        <item name="android:windowBackground">@color/background_light</item>
+        <item name="android:statusBarColor">@color/brand_blue_dark</item>
+        <item name="android:navigationBarColor">@color/surface_light</item>
+    </style>
+
+    <!-- Karanlik tema (values-night ile override edilir) -->
+    <style name="Theme.UsbManager.Dark" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/brand_blue_light</item>
+        <item name="colorPrimaryVariant">@color/brand_blue</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/brand_orange</item>
+        <item name="colorSurface">@color/surface_dark</item>
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="android:statusBarColor">@color/background_dark</item>
+        <item name="android:navigationBarColor">@color/surface_dark</item>
+    </style>
+
+    <!-- AMOLED Saf Siyah: pil tasarrufu icin butun surface'ler #000000 -->
+    <style name="Theme.UsbManager.Amoled" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/brand_blue_light</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/brand_orange</item>
+        <item name="colorSurface">@color/surface_amoled</item>
+        <item name="android:colorBackground">@color/black_pure</item>
+        <item name="android:windowBackground">@color/black_pure</item>
+        <item name="android:statusBarColor">@color/black_pure</item>
+        <item name="android:navigationBarColor">@color/black_pure</item>
+    </style>
+
+    <!-- Drawer menu item icon rengi (secili / secili degil) -->
+    <color name="drawer_icon_tint">@color/text_secondary_dark</color>
+</resources>

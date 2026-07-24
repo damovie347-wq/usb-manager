@@ -1,0 +1,62 @@
+<resources>
+    <string name="app_name">USB Manager</string>
+    <string name="app_subtitle">Evrensel USB &amp; Depolama Yöneticisi</string>
+
+    <!-- Drawer menu -->
+    <string name="menu_format">Biçimlendirme &amp; Low-Level Format</string>
+    <string name="menu_file_manager">Evrensel Dosya Yöneticisi</string>
+    <string name="menu_speed_test">USB Hız Testi</string>
+    <string name="menu_iso_writer">Bootable ISO Yazıcı</string>
+    <string name="menu_settings">Ayarlar</string>
+
+    <!-- Format screen -->
+    <string name="format_title">Biçimlendirme &amp; Low-Level Format</string>
+    <string name="format_choose_fs">Dosya Sistemi Seçin</string>
+    <string name="format_choose_mode">Mod Seçin</string>
+    <string name="format_mode_quick">Hızlı Biçimlendir</string>
+    <string name="format_mode_quick_desc">Dosya sistemi indeksini temizler ve yeni formata çevirir</string>
+    <string name="format_mode_lowlevel">Low-Level Format (Zero-Fill)</string>
+    <string name="format_mode_lowlevel_desc">Tüm sektörlerin üzerine sıfır yazarak derin temizlik yapar</string>
+    <string name="format_warning">TÜM VERİLER SİLİNECEKTİR!</string>
+    <string name="format_start">İŞLEME BAŞLA</string>
+    <string name="format_confirm_title">Emin misiniz?</string>
+    <string name="format_confirm_message">Bu işlem seçili USB üzerindeki TÜM VERİLERİ kalıcı olarak silecektir. Bu işlem GERİ ALINAMAZ.</string>
+    <string name="format_confirm_final">Son onay: Devam etmek istediğinize emin misiniz?</string>
+
+    <!-- File manager -->
+    <string name="fm_title">Dosya Yöneticisi</string>
+    <string name="fm_copy">Kopyala</string>
+    <string name="fm_move">Taşı</string>
+    <string name="fm_delete">Sil</string>
+    <string name="fm_disk_info">Disk Bilgisi</string>
+    <string name="fm_open_with">Birlikte Aç</string>
+    <string name="fm_no_device">Bağlı USB depolama bulunamadı</string>
+
+    <!-- Speed test -->
+    <string name="speed_title">USB Hız Testi</string>
+    <string name="speed_tab_write">YAZMA TESTİ</string>
+    <string name="speed_tab_read">OKUMA TESTİ</string>
+    <string name="speed_start">TESTİ BAŞLAT</string>
+    <string name="speed_stop">TESTİ DURDUR</string>
+    <string name="speed_test_file">Test Dosyası</string>
+    <string name="speed_duration">Süre</string>
+
+    <!-- ISO writer -->
+    <string name="iso_title">Bootable ISO/IMG Yazıcı</string>
+    <string name="iso_pick_file">ISO/IMG Dosyası Seç</string>
+    <string name="iso_target_usb">Hedef USB</string>
+    <string name="iso_write_mode">Yazma Modu</string>
+    <string name="iso_start">YAZMAYA BAŞLA</string>
+    <string name="iso_warning">TÜM VERİLER SİLİNECEKTİR!</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Ayarlar</string>
+    <string name="settings_theme">Tema Seçimi</string>
+    <string name="theme_light">Açık Tema</string>
+    <string name="theme_dark">Karanlık Tema</string>
+    <string name="theme_amoled">AMOLED Saf Siyah</string>
+    <string name="theme_system">Sistem Varsayılanı</string>
+    <string name="settings_animations">Animasyonlar</string>
+    <string name="settings_haptics">Haptik Geri Bildirim</string>
+    <string name="settings_about">Hakkında</string>
+</resources>

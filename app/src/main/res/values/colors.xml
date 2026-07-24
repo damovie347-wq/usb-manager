@@ -1,1 +1,29 @@
+<resources>
+    <!-- Marka renkleri (ekran goruntusundeki lacivert/mavi paletten esinlenildi) -->
+    <color name="brand_blue">#2F6FE4</color>
+    <color name="brand_blue_light">#5B93F0</color>
+    <color name="brand_blue_dark">#1D4ED8</color>
+    <color name="brand_orange">#F0A83B</color>
 
+    <color name="success_green">#23A55A</color>
+    <color name="danger_red">#E5484D</color>
+    <color name="warning_yellow">#F5C518</color>
+
+    <color name="white">#FFFFFF</color>
+    <color name="black_pure">#000000</color>
+
+    <!-- Acik tema -->
+    <color name="background_light">#F4F6FB</color>
+    <color name="surface_light">#FFFFFF</color>
+    <color name="text_primary_light">#101827</color>
+    <color name="text_secondary_light">#5B6472</color>
+
+    <!-- Karanlik tema (screenshot'taki lacivert tonu) -->
+    <color name="background_dark">#0E1A2B</color>
+    <color name="surface_dark">#152238</color>
+    <color name="text_primary_dark">#F4F6FB</color>
+    <color name="text_secondary_dark">#93A0B4</color>
+
+    <!-- AMOLED: yuzeyler de dahil her yer saf siyah -->
+    <color name="surface_amoled">#000000</color>
+</resources>
