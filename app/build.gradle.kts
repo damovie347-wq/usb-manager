@@ -76,7 +76,7 @@ dependencies {
     // uyusmazligi olursa https://github.com/magnusja/libaums adresindeki
     // "Releases" sekmesinden en guncel surumu kontrol edin.
     implementation("me.jahnen.libaums:core:0.10.0")
-    implementation("me.jahnen.libaums:storageprovider:0.10.0")
+
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
