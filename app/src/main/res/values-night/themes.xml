@@ -1,1 +1,17 @@
-
+<resources>
+    <!--
+        Sistem "Karanlik Tema"yi (MODE_NIGHT_YES / FOLLOW_SYSTEM + karanlik)
+        secince, temel Theme.UsbManager stili bu dosyadaki degerlerle
+        otomatik olarak override edilir (AppCompat/Material gece niteligi).
+    -->
+    <style name="Theme.UsbManager" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/brand_blue_light</item>
+        <item name="colorPrimaryVariant">@color/brand_blue</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/brand_orange</item>
+        <item name="colorSurface">@color/surface_dark</item>
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="android:statusBarColor">@color/background_dark</item>
+        <item name="android:navigationBarColor">@color/surface_dark</item>
+    </style>
+</resources>
