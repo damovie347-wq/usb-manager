@@ -1,1 +1,25 @@
-
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/nav_format"
+            android:icon="@drawable/ic_format"
+            android:title="@string/menu_format" />
+        <item
+            android:id="@+id/nav_file_manager"
+            android:icon="@drawable/ic_folder"
+            android:title="@string/menu_file_manager" />
+        <item
+            android:id="@+id/nav_speed_test"
+            android:icon="@drawable/ic_speed"
+            android:title="@string/menu_speed_test" />
+        <item
+            android:id="@+id/nav_iso_writer"
+            android:icon="@drawable/ic_iso"
+            android:title="@string/menu_iso_writer" />
+        <item
+            android:id="@+id/nav_settings"
+            android:icon="@drawable/ic_settings"
+            android:title="@string/menu_settings" />
+    </group>
+</menu>
