@@ -66,7 +66,7 @@ class ScsiRawBlockDevice private constructor(
         var remainingBlocks = totalToRead / blockSizeBytes
 
         while (remainingBlocks > 0) {
-            val blocksNow = minOf(remainingBlocks, maxBlocksPerCommand.toLong()).toInt()
+            val blocksNow = minOf(remainingBlocks.toLong(), maxBlocksPerCommand.toLong()).toInt()
             val chunkBytes = blocksNow * blockSizeBytes
             val chunkData = ByteArray(chunkBytes)
 
@@ -95,7 +95,7 @@ class ScsiRawBlockDevice private constructor(
         var remainingBlocks = totalToWrite / blockSizeBytes
 
         while (remainingBlocks > 0) {
-            val blocksNow = minOf(remainingBlocks, maxBlocksPerCommand.toLong()).toInt()
+            val blocksNow = minOf(remainingBlocks.toLong(), maxBlocksPerCommand.toLong()).toInt()
             val chunkBytes = blocksNow * blockSizeBytes
             val chunkData = ByteArray(chunkBytes)
             buffer.get(chunkData)
