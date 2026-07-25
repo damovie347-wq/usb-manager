@@ -109,7 +109,7 @@ class IsoWriterFragment : Fragment() {
 
         viewModel.targetDevice.observe(viewLifecycleOwner) { device ->
             binding.textTargetDevice.text = if (device != null) {
-                val capacityGb = (device.blockSize.toLong() * device.blockCount) / (1024.0 * 1024 * 1024)
+                val capacityGb = device.capacityBytes / (1024.0 * 1024 * 1024)
                 String.format(Locale.getDefault(), "%s — %.2f GB", device.usbDevice.productName ?: "USB", capacityGb)
             } else "Bağlı USB bulunamadı"
             updateStartButtonState()
