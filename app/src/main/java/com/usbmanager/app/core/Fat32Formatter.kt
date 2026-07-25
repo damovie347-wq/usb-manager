@@ -43,7 +43,7 @@ object Fat32Formatter {
             numFats = numFats
         )
 
-        val firstFatSector = reservedSectors
+        val firstFatSector = reservedSectors.toLong()
         val secondFatSector = firstFatSector + fatSize
         val rootDirCluster = 2L
         val dataStartSector = reservedSectors + (numFats * fatSize)
