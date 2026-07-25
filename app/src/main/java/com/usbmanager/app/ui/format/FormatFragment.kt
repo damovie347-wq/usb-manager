@@ -68,7 +68,7 @@ class FormatFragment : Fragment() {
             if (device != null) {
                 binding.cardDeviceInfo.visibility = View.VISIBLE
                 binding.textDeviceName.text = device.usbDevice.productName ?: getString(R.string.menu_format)
-                val capacityGb = (device.blockSize.toLong() * device.blockCount) / (1024.0 * 1024 * 1024)
+                val capacityGb = device.capacityBytes / (1024.0 * 1024 * 1024)
                 binding.textDeviceCapacity.text = String.format("%.2f GB", capacityGb)
             } else {
                 binding.cardDeviceInfo.visibility = View.GONE
