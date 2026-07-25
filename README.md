@@ -16,20 +16,25 @@ neyin gerçekten çalıştığını net söylemektir:
 |---|---|---|
 | Navigasyon, 4 Tema (Açık/Karanlık/AMOLED/Sistem), Responsive UI | ✅ **Çalışıyor** | Tam Kotlin + XML implementasyonu |
 | USB OTG algılama (sistem "açılsın mı?" popup'ı) | ✅ **Çalışıyor** | Manifest intent-filter + `MainActivity` |
-| Dosya Yöneticisi (gezinme, kopyala/taşı/sil, "Birlikte Aç") | ✅ **Çalışıyor** | [libaums](https://github.com/magnusja/libaums) `UsbFile` API'si üzerinden, **root'suz** |
-| USB Hız Testi (Direct I/O, cache bypass) | ✅ **Çalışıyor** | libaums doğrudan USB bulk-transfer kullandığı için Android sayfa önbelleğini zaten atlar |
-| Bootable ISO/IMG Yazıcı (RAW/DD modu) | ✅ **Çalışıyor** | Seçilen imaj, USB'nin ham bloklarına sektör sektör yazılır (`dd` mantığı) |
-| **FAT32** biçimlendirme (Hızlı + Low-Level Zero-Fill) | ✅ **Çalışıyor** | Microsoft fatgen103 spesifikasyonuna göre gerçek bir MBR/Boot Sector/FAT yazıcı |
+| Dosya Yöneticisi (gezinme, kopyala/taşı/sil, "Birlikte Aç") | ✅ **Çalışıyor** | [libaums](https://github.com/magnusja/libaums)'un GENEL `FileSystem`/`UsbFile` API'si üzerinden, **root'suz** |
+| USB Hız Testi (Direct I/O, cache bypass) | ✅ **Çalışıyor** | Aynı libaums `FileSystem`/`UsbFile` API'si; libaums doğrudan USB bulk-transfer kullandığı için Android sayfa önbelleğini zaten atlar |
+| Bootable ISO/IMG Yazıcı (RAW/DD modu) | ✅ **Çalışıyor** | **libaums'a bağlı DEĞİL** — kendi USB Mass Storage Bulk-Only Transport + SCSI READ(10)/WRITE(10) implementasyonumuz (`ScsiRawBlockDevice.kt`) üzerinden ham bloklara sektör sektör yazar |
+| **FAT32** biçimlendirme (Hızlı + Low-Level Zero-Fill) | ✅ **Çalışıyor** | Aynı şekilde `ScsiRawBlockDevice` üzerinden; Microsoft fatgen103 spesifikasyonuna göre gerçek bir MBR/Boot Sector/FAT yazıcı |
 | **exFAT / NTFS / Ext2‑4 / Btrfs / F2FS / XFS / HFS+ / APFS** biçimlendirme | 🟡 **Yol haritasında** | Aşağıdaki "Yol Haritası" bölümüne bakın |
 
-**Neden hepsi değil?** NTFS, Ext4, Btrfs gibi dosya sistemlerinin yazıcısını
-(formatter) sıfırdan, doğru ve güvenli şekilde yazmak — ki bozuk bir yazıcı
-kullanıcının USB'sini kalıcı olarak bozabilir — gerçek dünyada haftalar süren,
-genellikle native (C/C++, NDK ile derlenmiş) kütüphane entegrasyonu gerektiren
-ayrı bir mühendislik çalışmasıdır (bkz. Paragon Software'in NTFS/exFAT
-sürücüleri, ya da `e2fsprogs`/`ntfs-3g`'nin Android'e taşınması). Bunu "yaptık"
-demek yerine, mimariyi (`FormatEngine`, `FileSystemType.SupportLevel`) bu
-kütüphaneleri takabileceğiniz şekilde hazırladık.
+**Önemli mimari not (gerçek CI derlemesiyle keşfedildi ve düzeltildi):**
+İlk sürümde Format ve ISO Yazıcı modülleri, ham (raw) blok erişimi için
+libaums'un `UsbMassStorageDevice.read()/write()/blockSize/blockCount` gibi
+metotlarına dayanıyordu. Gerçek derleme bunun **libaums'un genel API'sinde
+var olmadığını** ortaya çıkardı — kütüphane kasıtlı olarak sadece
+`FileSystem`/`UsbFile` (tanınmış bir dosya sistemi) üzerinden erişim sunuyor,
+ham disk erişimi (MBR yazma, dd-tarzı sektör kopyalama) sunmuyor. Bunun
+üzerine, **USB Mass Storage Bulk-Only Transport + SCSI komut setini**
+(`ScsiRawBlockDevice.kt`) doğrudan Android'in USB Host API'si üzerinde,
+libaums'a bağlı olmadan kendimiz yazdık — bu tam olarak libaums'un kendi
+içinde yaptığı ama dışarı açmadığı şeydir. Dosya Yöneticisi ve Hız Testi
+modülleri hâlâ libaums'un sağlam `FileSystem`/`UsbFile` API'sini kullanıyor;
+onlarda değişiklik gerekmedi.
 
 ---
 
@@ -45,7 +50,7 @@ USB-Manager/
 │       └── java/com/usbmanager/app/
 │           ├── MainActivity.kt      ← Drawer navigasyonu + USB attach yakalama
 │           ├── theme/ThemeManager.kt← 4 modlu tema motoru
-│           ├── usb/                 ← libaums sarmalayıcı (RawBlockDevice, izin akışı)
+│           ├── usb/                 ← libaums sarmalayıcı (izin akışı) + kendi SCSI implementasyonumuz (ScsiRawBlockDevice)
 │           ├── core/                ← FormatEngine, SpeedTestEngine, IsoWriterEngine, Fat32Formatter
 │           └── ui/                  ← Her modül için Fragment + ViewModel + (varsa) özel View
 └── README.md                        ← bu dosya
@@ -99,23 +104,28 @@ teknik temelidir.
 
 ---
 
-## 3) Bilinmesi Gerekenler / İlk Derlemede Kontrol Edilecekler
+## 3) Bilinmesi Gerekenler / Gerçek Donanımda Test Ederken Aklınızda Olsun
 
-Bu proje, gerçek USB donanımıyla konuşan bir kütüphaneye (libaums) dayandığı
-için, dürüstçe belirtmemiz gereken birkaç risk noktası var:
+`ScsiRawBlockDevice.kt`, USB Mass Storage Bulk-Only Transport + SCSI
+READ(10)/WRITE(10) protokolünün kendi implementasyonumuzdur (bkz. dosyanın
+başındaki mimari not). Standart, sağlıklı bir USB flash bellekte güvenilir
+çalışacak şekilde yazıldı, ancak şunları bilerek belirtmemiz gerekir:
 
-1. **`usb/RawBlockDevice.kt`** — `device.read(block, buffer)` /
-   `device.write(block, buffer)` çağrıları, libaums'un incelenen sürümünde bu
-   isimlerle `UsbMassStorageDevice` üzerinde bulunacağı varsayımıyla yazıldı.
-   Kütüphane güncellenmiş olabilir; derleme hatası alırsanız
-   [libaums kaynak kodunu](https://github.com/magnusja/libaums) açıp güncel
-   metod adını bulun ve SADECE bu dosyadaki `rawDeviceOf()` fonksiyonunu
-   güncelleyin — geri kalan tüm uygulama değişmeden çalışmaya devam eder
-   (adaptör deseni tam olarak bunun için var).
-2. **`me.jahnen.libaums:core:0.10.0`** — bağımlılık sürümü, bu projenin
-   hazırlandığı tarihte Maven Central'daki güncel sürümdü. Yeni bir sürüm
-   çıktıysa `app/build.gradle.kts` içinde güncelleyin.
-3. Fiziksel test: `Fat32Formatter` referans/eğitim kalitesindedir. Gerçek bir
+1. **Sadece LUN 0 desteklenir.** USB flash belleklerin neredeyse tamamı tek
+   LUN'dur; çoklu-LUN kart okuyucular (SD+microSD gibi çoklu yuvalı) bu
+   sürümde çalışmayabilir.
+2. **~2 TB üzeri diskler desteklenmez** (READ10/WRITE10'un 32-bit LBA
+   sınırı). USB flash bellekler pratikte bu boyutun çok altındadır.
+3. **Tam BBB hata kurtarma (Mass Storage Reset + clear-halt) bu sürümde
+   yok.** Bir SCSI komutu başarısız olursa `IOException` fırlatılır ve
+   işlem durur; sağlıklı bir bellekte "happy path" güvenilir çalışır, ama
+   yarı-arızalı/uyumsuz bir bellekte ek hata-kurtarma mantığı gerekebilir.
+4. **`me.jahnen.libaums:core:0.10.0`** — bağımlılık sürümü, bu projenin
+   hazırlandığı tarihte Maven Central'daki güncel sürümdü (`storageprovider`
+   alt modülü bu sürümle yayınlanmadığı için kaldırıldı, çekirdek
+   işlevsellik etkilenmez). Yeni bir sürüm çıktıysa `app/build.gradle.kts`
+   içinde güncelleyin.
+5. Fiziksel test: `Fat32Formatter` referans/eğitim kalitesindedir. Gerçek bir
    USB bellek üzerinde biçimlendirip, bilgisayarınızda (Windows/Linux/Mac)
    sorunsuz okunup okunmadığını mutlaka doğrulayın.
 
