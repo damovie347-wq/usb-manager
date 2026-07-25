@@ -13,21 +13,15 @@ import me.jahnen.libaums.core.fs.FileSystem
 import me.jahnen.libaums.core.partition.Partition
 
 /**
- * USB Mass Storage aygitlarina ROOT GEREKTIRMEDEN, dogrudan Android USB Host
- * API + SCSI komut seti uzerinden ham (raw) erisim saglayan katman.
+ * USB Mass Storage aygitlarini ROOT GEREKTIRMEDEN listeler, izin akisini
+ * yonetir ve libaums'un GENEL API'si olan FileSystem/Partition'a erisim
+ * saglar. Bu katman Dosya Yoneticisi ve Hiz Testi modulleri tarafindan
+ * kullanilir.
  *
- * Bu katman, uygulamanin "Direct I/O", "Low-Level Format" ve "RAW/DD ISO
- * yazma" gereksinimlerinin teknik temelidir: libaums bir Linux blok aygiti
- * (/dev/sdX) ACMADAN, USB bulk-transfer uzerinden dogrudan SCSI
- * READ(10)/WRITE(10) komutlariyla konusur. Boylece Android'in sayfa
- * onbellegi (page cache) tamamen atlanir ve olculen hiz gercek donanim
- * hizidir.
- *
- * ONEMLI (durum notu): libaums acik kaynakli, aktif gelisen bir kutuphanedir
- * (https://github.com/magnusja/libaums). Asagidaki cagrilar `core:0.10.0`
- * surumune gore yazildi; ilk CI derlemesinde kucuk API isim farkliliklari
- * cikarsa, kutuphanenin kendi `app/` ornek projesindeki kullanimla
- * karsilastirarak birebir duzeltin.
+ * NOT: Format ve ISO Yazici modulleri -- MBR/FAT tablosu yazma, dd-tarzi
+ * ham blok yazma gibi libaums'un DISARI ACMADIGI islemler icin -- bu
+ * dosyayi degil, dogrudan `ScsiRawBlockDevice.open()`'i kullanir (bkz.
+ * ScsiRawBlockDevice.kt basindaki mimari not).
  */
 object UsbMassStorageManager {
 
@@ -86,22 +80,4 @@ object UsbMassStorageManager {
     }
 
     fun fileSystemOf(partition: Partition): FileSystem? = partition.fileSystem
-
-    /** Blok boyutu (genelde 512 byte) — hiz testi / zero-fill hizalamasi icin. */
-    fun blockSize(device: UsbMassStorageDevice): Int = device.blockSize
-
-    /** Toplam kapasite (byte). */
-    fun capacityBytes(device: UsbMassStorageDevice): Long =
-        device.blockSize.toLong() * device.blockCount
-
-    /**
-     * Aygiti baslatir (SCSI Inquiry/ReadCapacity) ve Format/SpeedTest/
-     * IsoWriter motorlarinin kullandigi ham blok arayuzunu (RawBlockDevice)
-     * dondurur. Bu, partition/dosya-sistemi katmanini ATLAYIP diskin
-     * TAMAMINA (LBA 0 dahil) erisim saglar.
-     */
-    fun initializedRawDevice(device: UsbMassStorageDevice): RawBlockDevice {
-        device.init()
-        return rawDeviceOf(device)
-    }
 }

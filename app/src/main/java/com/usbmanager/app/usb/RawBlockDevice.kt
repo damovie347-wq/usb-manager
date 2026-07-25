@@ -1,37 +1,25 @@
 package com.usbmanager.app.usb
 
-import me.jahnen.libaums.core.UsbMassStorageDevice
 import java.nio.ByteBuffer
 
 /**
- * libaums'un, surumden suruma degisebilecek ic API yuzeyini TEK bir noktada
- * izole eden ince adaptor (adapter pattern).
+ * Ham (raw) blok seviyesinde okuma/yazma arayuzu.
  *
- * FormatEngine / SpeedTestEngine / IsoWriterEngine bu dosyanin disinda
- * ASLA dogrudan `UsbMassStorageDevice`'in blok-seviyesi metotlarini
- * cagirmaz; hepsi sadece `RawBlockDevice` arayuzunu kullanir. Boylece
- * libaums surum guncellemesi / API degisikligi durumunda TEK bir dosya
- * (bu dosya) guncellenir.
+ * ONEMLI MIMARI NOT (gercek CI derlemesiyle dogrulandi): libaums'un GENEL
+ * (public) API'si -- FileSystem / UsbFile -- bu tur ham blok erisimi
+ * SUNMAZ; kutuphane sadece taninan bir dosya sistemi (bugunku surumde
+ * FAT32) uzerinden dosya/klasor islemlerine izin verir. Bu yuzden bu
+ * arayuzun TEK implementasyonu artik `ScsiRawBlockDevice`'tir (bkz.
+ * ScsiRawBlockDevice.kt) -- USB Mass Storage Bulk-Only Transport + SCSI
+ * READ(10)/WRITE(10) komut setini dogrudan Android USB Host API uzerinde
+ * uygulayan, hicbir ucuncu taraf kutuphaneye bagli olmayan bir sinif.
  *
- * =====================================================================
- *  DOGRULAMA GEREKEN NOKTA (ilk CI derlemesinde en olasi hata kaynagi)
- * =====================================================================
- * `device.read(block, buffer)` / `device.write(block, buffer)` cagrilari
- * bu iskelette me.jahnen.libaums:core:0.10.0 uzerinden dogrudan
- * `UsbMassStorageDevice` uzerinde bulunacagi varsayimiyla yazildi.
- * Kutuphanenin bazi surumlerinde bu metotlar `UsbMassStorageDevice`
- * uzerinde degil, alttaki `BlockDeviceDriver` / `ScsiBlockDevice`
- * nesnesinde olabilir. Derleme hatasi alirsaniz:
- *   1) https://github.com/magnusja/libaums -> `core/src/main/java/.../UsbMassStorageDevice.kt`
- *      dosyasini acin,
- *   2) blok okuma/yazma icin genel erisimli (public) metot/alanin GUNCEL
- *      adini bulun,
- *   3) SADECE asagidaki `rawDeviceOf()` fonksiyonunu o isme gore duzeltin.
- * Uygulamanin geri kalani (UI, coroutine akisi, ilerleme yuzdesi vb.)
- * degismeden calismaya devam eder.
+ * FormatEngine / Fat32Formatter / IsoWriterEngine SADECE bu arayuzu
+ * kullanir; somut implementasyonun (ScsiRawBlockDevice) nasil calistigini
+ * bilmeleri gerekmez.
  */
 interface RawBlockDevice {
-    /** Sektor / blok boyutu (genelde 512 bayt). */
+    /** Sektor / blok boyutu (genelde 512 bayt, bazi cihazlarda 4096). */
     val blockSizeBytes: Int
 
     /** Aygitin toplam kapasitesi (bayt). */
@@ -42,19 +30,4 @@ interface RawBlockDevice {
 
     /** `byteOffset` HER ZAMAN blockSizeBytes'a hizali olmalidir. */
     fun writeAt(byteOffset: Long, buffer: ByteBuffer)
-}
-
-fun rawDeviceOf(device: UsbMassStorageDevice): RawBlockDevice = object : RawBlockDevice {
-    override val blockSizeBytes: Int get() = device.blockSize
-    override val totalBytes: Long get() = device.blockSize.toLong() * device.blockCount
-
-    override fun readAt(byteOffset: Long, buffer: ByteBuffer) {
-        val block = byteOffset / device.blockSize
-        device.read(block, buffer)
-    }
-
-    override fun writeAt(byteOffset: Long, buffer: ByteBuffer) {
-        val block = byteOffset / device.blockSize
-        device.write(block, buffer)
-    }
 }
