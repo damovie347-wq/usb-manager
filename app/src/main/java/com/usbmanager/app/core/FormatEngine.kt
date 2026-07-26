@@ -55,6 +55,9 @@ object FormatEngine {
                         FileSystemType.EXFAT -> ExFatFormatter.format(raw) { pct ->
                             onProgress(FormatProgress(FormatStage.WritingFileSystem, pct))
                         }
+                        FileSystemType.NTFS -> NtfsFormatter.format(raw) { pct ->
+                            onProgress(FormatProgress(FormatStage.WritingFileSystem, pct))
+                        }
                         else -> return@withContext FormatResult.Unsupported(targetFs)
                     }
                     onProgress(FormatProgress(FormatStage.Done, 100))

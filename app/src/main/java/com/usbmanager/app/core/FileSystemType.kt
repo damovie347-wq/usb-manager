@@ -15,7 +15,7 @@ enum class FileSystemType(
     FAT16("FAT16", SupportLevel.ROADMAP),
     FAT32("FAT32", SupportLevel.IMPLEMENTED),
     EXFAT("exFAT", SupportLevel.IMPLEMENTED),
-    NTFS("NTFS", SupportLevel.ROADMAP),
+    NTFS("NTFS", SupportLevel.IMPLEMENTED),
     EXT2("Ext2", SupportLevel.ROADMAP),
     EXT3("Ext3", SupportLevel.ROADMAP),
     EXT4("Ext4", SupportLevel.ROADMAP),
