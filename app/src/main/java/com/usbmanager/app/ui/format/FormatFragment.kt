@@ -49,18 +49,44 @@ class FormatFragment : Fragment() {
     private fun populateFileSystemChips() {
         binding.chipGroupFs.removeAllViews()
         FileSystemType.entries.forEach { fs ->
+            val isRoadmap = fs.uygulamaDurumu == FileSystemType.SupportLevel.ROADMAP
             val chip = Chip(requireContext()).apply {
-                text = if (fs.uygulamaDurumu == FileSystemType.SupportLevel.ROADMAP)
-                    "${fs.displayName} (yakında)" else fs.displayName
+                text = if (isRoadmap) "${fs.displayName} (henüz yok)" else fs.displayName
                 isCheckable = true
                 isChecked = fs == selectedFs
-                tag = fs
             }
             chip.setOnClickListener {
-                selectedFs = fs
+                if (isRoadmap) {
+                    // ONCEKI DAVRANIS: kullanici bu chip'i secebiliyor, sonra
+                    // ancak "İŞLEME BAŞLA" tusuna basip iki onay dialogunu
+                    // gectikten SONRA bir Snackbar ile "desteklenmiyor"
+                    // mesaji goruyordu -- bu "kirik/yaricalismis" bir his
+                    // veriyordu. Simdi tıklanır tıklanmaz NEDEN henuz
+                    // olmadigini ACIKCA anlatiyoruz ve secimi degistirmiyoruz.
+                    chip.isChecked = (selectedFs == fs)
+                    showRoadmapInfo(fs)
+                } else {
+                    selectedFs = fs
+                }
             }
             binding.chipGroupFs.addView(chip)
         }
+    }
+
+    private fun showRoadmapInfo(fs: FileSystemType) {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("${fs.displayName} henüz yok")
+            .setMessage(
+                "${fs.displayName} için gerçek ve güvenilir bir biçimlendirici yazmak, " +
+                    "diskin ham veri yapılarını (dizin/meta veri tabloları vb.) sıfırdan " +
+                    "doğru şekilde oluşturmayı gerektiren büyük ve riskli bir mühendislik " +
+                    "işidir — yanlış yazılmış bir dosya sistemi, USB belleğinizin " +
+                    "bilgisayarınızda okunamaz hale gelmesine yol açabilir.\n\n" +
+                    "Bu yüzden şu an yalnızca FAT32 ve exFAT güvenle destekleniyor; " +
+                    "${fs.displayName} yol haritasında yer alıyor."
+            )
+            .setPositiveButton("Anladım", null)
+            .show()
     }
 
     private fun observeViewModel() {
@@ -92,7 +118,7 @@ class FormatFragment : Fragment() {
                 is FormatResult.Success ->
                     showMessage("Biçimlendirme tamamlandı ✅")
                 is FormatResult.Unsupported ->
-                    showMessage("${result.fs.displayName} bu sürümde henüz desteklenmiyor (yol haritasında). Şimdilik FAT32 kullanılabilir.")
+                    showMessage("${result.fs.displayName} bu sürümde henüz desteklenmiyor (yol haritasında). Şimdilik FAT32 veya exFAT kullanabilirsiniz.")
                 is FormatResult.Failed ->
                     showMessage("Hata: ${result.error.message ?: result.error::class.simpleName}")
                 null -> Unit
