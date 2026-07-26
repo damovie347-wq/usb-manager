@@ -80,4 +80,21 @@ object UsbMassStorageManager {
     }
 
     fun fileSystemOf(partition: Partition): FileSystem? = partition.fileSystem
+
+    /**
+     * `fileSystemOf()` `null` dondugunde (libaums bu dosya sistemini
+     * ANLAMADIGI icin) GERCEK nedeni ogrenmek uzere cagrilir: aygiti KISA
+     * SURELIGINE ham (raw) modda acip onyukleme sektorunu okur, sonra
+     * HEMEN kapatir. Izin ONCEDEN verilmis olmalidir. Herhangi bir
+     * hata/uyumsuzluk durumunda sessizce `null` doner (bu sadece bir
+     * TESHIS yardimcisidir, ana akisi asla bozmamali).
+     */
+    fun sniffUnrecognizedFileSystem(context: Context, usbDevice: UsbDevice): String? = runCatching {
+        val raw = ScsiRawBlockDevice.open(context, usbDevice)
+        try {
+            RawFileSystemSniffer.sniffLabel(raw)
+        } finally {
+            raw.close()
+        }
+    }.getOrNull()
 }
