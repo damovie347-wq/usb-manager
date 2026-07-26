@@ -40,27 +40,54 @@ class SpeedTestViewModel(app: Application) : AndroidViewModel(app) {
     private val _deviceReady = MutableLiveData(false)
     val deviceReady: LiveData<Boolean> = _deviceReady
 
+    private val _statusMessage = MutableLiveData<String?>()
+    val statusMessage: LiveData<String?> = _statusMessage
+
+    /** Fragment, mevcut baglanti YOKKEN (ekrana donuldugunde) yeniden denemek icin kullanir. */
+    fun isConnected(): Boolean = fileSystem != null
+
     fun connectToFirstAvailableDevice() {
         val ctx = getApplication<android.app.Application>()
         val device = UsbMassStorageManager.listDevices(ctx).firstOrNull()
         if (device == null) {
             fileSystem = null
             _deviceReady.value = false
+            // ONCEKI DAVRANIS: burada hicbir aciklama verilmiyordu, "Testi
+            // Baslat" tusu SESSIZCE devre disi kaliyordu. Artik neden
+            // baslatilamadigini soyluyoruz.
+            _statusMessage.postValue("Bağlı USB depolama bulunamadı.")
             return
         }
         UsbMassStorageManager.requestPermissionIfNeeded(ctx, device.usbDevice) { granted ->
             if (!granted) {
                 _deviceReady.value = false
+                _statusMessage.postValue("USB erişim izni verilmedi")
                 return@requestPermissionIfNeeded
             }
             viewModelScope.launch(Dispatchers.IO) {
+                // Baska bir ekranin acik birakmis olabilecegi onceki
+                // baglantiyi once kapat (bkz. yukaridaki not).
+                closeCurrentDeviceQuietly()
                 val fs = runCatching {
-                    // Baska bir ekranin acik birakmis olabilecegi onceki
-                    // baglantiyi once kapat (bkz. yukaridaki not).
-                    closeCurrentDeviceQuietly()
                     UsbMassStorageManager.openFirstPartition(device)
                         ?.let { p -> UsbMassStorageManager.fileSystemOf(p) }
                 }.getOrNull()
+
+                if (fs == null) {
+                    // KOK NEDEN: libaums FAT32 disinda (exFAT/NTFS) bir dosya
+                    // sistemini ANLAMIYOR (bkz. FileManagerViewModel'deki ayni
+                    // notlar). Hiz testinin "algilamiyor" gibi gorunmesinin
+                    // gercek nedeni cogunlukla budur; bunu acikca soyluyoruz.
+                    runCatching { device.close() }
+                    val detected = UsbMassStorageManager.sniffUnrecognizedFileSystem(ctx, device.usbDevice)
+                    _statusMessage.postValue(
+                        if (detected != null)
+                            "USB bellek algılandı ama dosya sistemi $detected. Hız Testi şu an yalnızca FAT32'yi destekliyor; Biçimlendir ekranından FAT32'ye çevirebilirsiniz."
+                        else
+                            "USB bellek algılandı ama üzerinde okunabilir bir bölüm/dosya sistemi bulunamadı."
+                    )
+                }
+
                 fileSystem = fs
                 openDevice = if (fs != null) device else null
                 _deviceReady.postValue(fs != null)

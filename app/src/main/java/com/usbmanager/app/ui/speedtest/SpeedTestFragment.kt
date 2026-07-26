@@ -49,10 +49,30 @@ class SpeedTestFragment : Fragment() {
 
         observeViewModel()
         resetDisplay()
-        viewModel.connectToFirstAvailableDevice()
+        // NOT: ilk baglanti denemesi burada DEGIL, asagidaki onResume()
+        // icinde yapiliyor (bkz. FileManagerFragment'taki ayni not) -- iki
+        // eszamanli USB baglanti denemesinin birbirini kesintiye ugratmasini
+        // onlemek icin.
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // ONCEKI DAVRANIS: baglanti SADECE ekran ilk acildiginda bir kez
+        // denenirdi. Kullanici USB'yi bu ekrana GELMEDEN ONCE ya da baglanti
+        // ilk seferde basarisiz olduktan SONRA takarsa, ekrana tekrar donene
+        // kadar (ki bu da yeni bir Fragment orneği YARATMADIGI icin) hicbir
+        // yeniden deneme olmuyordu. Sadece HENUZ BAGLI DEGILKEN yeniden
+        // deniyoruz ki calisan bir testin ortasinda baglantiyi SIFIRLAMAYALIM.
+        if (!viewModel.isConnected()) {
+            viewModel.connectToFirstAvailableDevice()
+        }
     }
 
     private fun observeViewModel() {
+        viewModel.statusMessage.observe(viewLifecycleOwner) { msg ->
+            msg ?: return@observe
+            com.google.android.material.snackbar.Snackbar.make(binding.root, msg, com.google.android.material.snackbar.Snackbar.LENGTH_LONG).show()
+        }
         viewModel.isRunning.observe(viewLifecycleOwner) { running ->
             binding.buttonStartTest.text = getString(
                 if (running) R.string.speed_stop else R.string.speed_start
