@@ -82,7 +82,7 @@ class FormatFragment : Fragment() {
                     "doğru şekilde oluşturmayı gerektiren büyük ve riskli bir mühendislik " +
                     "işidir — yanlış yazılmış bir dosya sistemi, USB belleğinizin " +
                     "bilgisayarınızda okunamaz hale gelmesine yol açabilir.\n\n" +
-                    "Bu yüzden şu an yalnızca FAT32 ve exFAT güvenle destekleniyor; " +
+                    "Bu yüzden şu an yalnızca FAT32, exFAT ve NTFS güvenle destekleniyor; " +
                     "${fs.displayName} yol haritasında yer alıyor."
             )
             .setPositiveButton("Anladım", null)
@@ -118,7 +118,7 @@ class FormatFragment : Fragment() {
                 is FormatResult.Success ->
                     showMessage("Biçimlendirme tamamlandı ✅")
                 is FormatResult.Unsupported ->
-                    showMessage("${result.fs.displayName} bu sürümde henüz desteklenmiyor (yol haritasında). Şimdilik FAT32 veya exFAT kullanabilirsiniz.")
+                    showMessage("${result.fs.displayName} bu sürümde henüz desteklenmiyor (yol haritasında). Şimdilik FAT32, exFAT veya NTFS kullanabilirsiniz.")
                 is FormatResult.Failed ->
                     showMessage("Hata: ${result.error.message ?: result.error::class.simpleName}")
                 null -> Unit
