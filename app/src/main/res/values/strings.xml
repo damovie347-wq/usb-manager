@@ -34,12 +34,17 @@
 
     <!-- Speed test -->
     <string name="speed_title">USB Hız Testi</string>
-    <string name="speed_tab_write">YAZMA TESTİ</string>
-    <string name="speed_tab_read">OKUMA TESTİ</string>
     <string name="speed_start">TESTİ BAŞLAT</string>
     <string name="speed_stop">TESTİ DURDUR</string>
     <string name="speed_test_file">Test Dosyası</string>
     <string name="speed_duration">Süre</string>
+    <string name="speed_write_speed">Yazma Hızı</string>
+    <string name="speed_read_speed">Okuma Hızı</string>
+    <string name="speed_phase_idle">Hazır — tek tuşla otomatik yazma + okuma testi</string>
+    <string name="speed_phase_write">Yazma testi çalışıyor…</string>
+    <string name="speed_phase_read">Okuma testi çalışıyor…</string>
+    <string name="speed_phase_done">Test tamamlandı ✅</string>
+    <string name="speed_phase_no_device">Bağlı USB depolama bulunamadı</string>
 
     <!-- ISO writer -->
     <string name="iso_title">Bootable ISO/IMG Yazıcı</string>

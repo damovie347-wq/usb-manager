@@ -6,6 +6,7 @@
     <color name="brand_orange">#F0A83B</color>
 
     <color name="success_green">#23A55A</color>
+    <color name="disabled_grey">#9AA0AC</color>
     <color name="danger_red">#E5484D</color>
     <color name="warning_yellow">#F5C518</color>
 
