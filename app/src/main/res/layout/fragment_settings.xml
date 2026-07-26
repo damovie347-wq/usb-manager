@@ -75,6 +75,7 @@
                 app:layout_constraintTop_toBottomOf="@id/radio_group_theme" />
 
             <LinearLayout
+                android:id="@+id/row_animations"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
@@ -106,7 +107,7 @@
                 android:orientation="horizontal"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/switch_animations">
+                app:layout_constraintTop_toBottomOf="@id/row_animations">
 
                 <TextView
                     android:layout_width="0dp"
