@@ -12,16 +12,31 @@ import me.jahnen.libaums.core.fs.UsbFileOutputStream
 private const val TEST_FILE_NAME = "~usbmanager_speedtest.tmp"
 private const val CHUNK_SIZE = 4 * 1024 * 1024 // 4 MB'lik parcalar
 
+enum class TestPhase { WRITE, READ }
+
 sealed class SpeedTestUpdate {
     data class Progress(
+        val phase: TestPhase,
         val bytesDone: Long,
         val totalBytes: Long,
         val instantMBps: Double,
         val averageMBps: Double
     ) : SpeedTestUpdate()
 
-    data class Finished(val averageMBps: Double, val elapsedMs: Long) : SpeedTestUpdate()
-    data class CancelledOrFailed(val error: Throwable?) : SpeedTestUpdate()
+    /** Tek bir asama (sadece yazma YA DA sadece okuma) bittiginde yayinlanir. */
+    data class PhaseFinished(val phase: TestPhase, val averageMBps: Double, val elapsedMs: Long) : SpeedTestUpdate()
+
+    /**
+     * CrystalDiskMark tarzi TEK TUS testinin TAMAMI (yazma + okuma) bittiginde
+     * yayinlanir; ekran bu olayi yakalayip HER IKI sonucu birden gosterir.
+     */
+    data class AllFinished(
+        val writeAverageMBps: Double,
+        val readAverageMBps: Double,
+        val totalElapsedMs: Long
+    ) : SpeedTestUpdate()
+
+    data class CancelledOrFailed(val phase: TestPhase?, val error: Throwable?) : SpeedTestUpdate()
 }
 
 /**
@@ -37,6 +52,35 @@ sealed class SpeedTestUpdate {
  * ANINDA silinir; mevcut kullanici verilerine dokunulmaz.
  */
 object SpeedTestEngine {
+
+    /**
+     * KULLANICI ISTEGI: CrystalDiskMark'ta oldugu gibi TEK TUSA basinca hem
+     * yazma HEM okuma testi OTOMATIK VE SIRAYLA calisir; ayri ayri "yazma
+     * testi" / "okuma testi" secmeye gerek yoktur.
+     */
+    suspend fun runFullTest(
+        fs: FileSystem,
+        testSizeBytes: Long = 512L * 1024 * 1024,
+        onUpdate: (SpeedTestUpdate) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        val overallStart = System.nanoTime()
+        var writeAvg = 0.0
+        var readAvg = 0.0
+
+        runWriteTest(fs, testSizeBytes) { update ->
+            if (update is SpeedTestUpdate.PhaseFinished) writeAvg = update.averageMBps
+            onUpdate(update)
+        }
+        if (!currentCoroutineContext().isActive) return@withContext
+
+        runReadTest(fs, testSizeBytes) { update ->
+            if (update is SpeedTestUpdate.PhaseFinished) readAvg = update.averageMBps
+            onUpdate(update)
+        }
+
+        val totalElapsed = (System.nanoTime() - overallStart) / 1_000_000
+        onUpdate(SpeedTestUpdate.AllFinished(writeAvg, readAvg, totalElapsed))
+    }
 
     suspend fun runWriteTest(
         fs: FileSystem,
@@ -66,14 +110,14 @@ object SpeedTestEngine {
                     val elapsedSeconds = (System.nanoTime() - start) / 1_000_000_000.0
                     val avgMBps = if (elapsedSeconds > 0) (written / (1024.0 * 1024.0)) / elapsedSeconds else 0.0
 
-                    onUpdate(SpeedTestUpdate.Progress(written, testSizeBytes, instantMBps, avgMBps))
+                    onUpdate(SpeedTestUpdate.Progress(TestPhase.WRITE, written, testSizeBytes, instantMBps, avgMBps))
                 }
             }
             val elapsedMs = (System.nanoTime() - start) / 1_000_000
             val avgMBps = if (elapsedMs > 0) (written / (1024.0 * 1024.0)) / (elapsedMs / 1000.0) else 0.0
-            onUpdate(SpeedTestUpdate.Finished(avgMBps, elapsedMs))
+            onUpdate(SpeedTestUpdate.PhaseFinished(TestPhase.WRITE, avgMBps, elapsedMs))
         } catch (t: Throwable) {
-            onUpdate(SpeedTestUpdate.CancelledOrFailed(t))
+            onUpdate(SpeedTestUpdate.CancelledOrFailed(TestPhase.WRITE, t))
         } finally {
             // Test dosyasi ANINDA silinir (basarili / iptal / hata farketmez).
             deleteIfExists(root)
@@ -118,14 +162,14 @@ object SpeedTestEngine {
                     val elapsedSeconds = (System.nanoTime() - start) / 1_000_000_000.0
                     val avgMBps = if (elapsedSeconds > 0) (readTotal / (1024.0 * 1024.0)) / elapsedSeconds else 0.0
 
-                    onUpdate(SpeedTestUpdate.Progress(readTotal, testSizeBytes, instantMBps, avgMBps))
+                    onUpdate(SpeedTestUpdate.Progress(TestPhase.READ, readTotal, testSizeBytes, instantMBps, avgMBps))
                 }
             }
             val elapsedMs = (System.nanoTime() - start) / 1_000_000
             val avgMBps = if (elapsedMs > 0) (readTotal / (1024.0 * 1024.0)) / (elapsedMs / 1000.0) else 0.0
-            onUpdate(SpeedTestUpdate.Finished(avgMBps, elapsedMs))
+            onUpdate(SpeedTestUpdate.PhaseFinished(TestPhase.READ, avgMBps, elapsedMs))
         } catch (t: Throwable) {
-            onUpdate(SpeedTestUpdate.CancelledOrFailed(t))
+            onUpdate(SpeedTestUpdate.CancelledOrFailed(TestPhase.READ, t))
         } finally {
             deleteIfExists(root)
         }

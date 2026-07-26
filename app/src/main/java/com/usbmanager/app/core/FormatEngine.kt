@@ -48,9 +48,14 @@ object FormatEngine {
 
             when (targetFs.uygulamaDurumu) {
                 FileSystemType.SupportLevel.IMPLEMENTED -> {
-                    // Su an icin tek gercek yazici: FAT32
-                    Fat32Formatter.format(raw) { pct ->
-                        onProgress(FormatProgress(FormatStage.WritingFileSystem, pct))
+                    when (targetFs) {
+                        FileSystemType.FAT32 -> Fat32Formatter.format(raw) { pct ->
+                            onProgress(FormatProgress(FormatStage.WritingFileSystem, pct))
+                        }
+                        FileSystemType.EXFAT -> ExFatFormatter.format(raw) { pct ->
+                            onProgress(FormatProgress(FormatStage.WritingFileSystem, pct))
+                        }
+                        else -> return@withContext FormatResult.Unsupported(targetFs)
                     }
                     onProgress(FormatProgress(FormatStage.Done, 100))
                     FormatResult.Success
