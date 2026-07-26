@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
 import androidx.fragment.app.Fragment
 import com.google.android.material.navigation.NavigationView
+import com.usbmanager.app.core.AppPrefs
 import com.usbmanager.app.databinding.ActivityMainBinding
 import com.usbmanager.app.theme.ThemeManager
 import com.usbmanager.app.ui.filemanager.FileManagerFragment
@@ -105,7 +106,15 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
     }
 
     private fun showFragment(fragment: Fragment, checkedId: Int) {
-        supportFragmentManager.beginTransaction()
+        val transaction = supportFragmentManager.beginTransaction()
+        // Ayarlar > Animasyonlar kapaliysa, ekran gecislerinde HICBIR animasyon
+        // oynatilmaz (eskiden bu tercih hicbir yerde okunmuyordu).
+        if (AppPrefs.animationsEnabled(this)) {
+            transaction.setCustomAnimations(
+                android.R.anim.fade_in, android.R.anim.fade_out
+            )
+        }
+        transaction
             .replace(R.id.fragment_container, fragment)
             .commit()
         title = when (checkedId) {
