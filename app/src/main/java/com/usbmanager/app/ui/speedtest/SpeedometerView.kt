@@ -25,6 +25,12 @@ class SpeedometerView @JvmOverloads constructor(
     private var currentMBps = 0.0
     private var animatedMBps = 0.0
 
+    /**
+     * Ayarlar > Animasyonlar kapatildiginda Fragment tarafindan false yapilir;
+     * bu durumda ibre YUMUSAK GECIS yapmadan dogrudan hedef degere ATLAR.
+     */
+    var animateChanges: Boolean = true
+
     private val arcRect = RectF()
     private val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -51,6 +57,11 @@ class SpeedometerView @JvmOverloads constructor(
     fun setSpeed(mbps: Double) {
         currentMBps = mbps.coerceIn(0.0, maxMBps)
         animator?.cancel()
+        if (!animateChanges) {
+            animatedMBps = currentMBps
+            invalidate()
+            return
+        }
         animator = ValueAnimator.ofFloat(animatedMBps.toFloat(), currentMBps.toFloat()).apply {
             duration = 220
             interpolator = DecelerateInterpolator()
