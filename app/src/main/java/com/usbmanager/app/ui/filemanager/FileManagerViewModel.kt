@@ -9,6 +9,7 @@ import com.usbmanager.app.usb.UsbMassStorageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.jahnen.libaums.core.UsbMassStorageDevice
 import me.jahnen.libaums.core.fs.FileSystem
 import me.jahnen.libaums.core.fs.UsbFile
 import me.jahnen.libaums.core.fs.UsbFileInputStream
@@ -23,6 +24,12 @@ data class DiskInfo(
 class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
 
     private var fileSystem: FileSystem? = null
+
+    // KRITIK DUZELTME: acik USB baglantisini tutuyoruz ki ekran kapaninca
+    // (onCleared) kapatabilelim. Kapatilmazsa, baska bir ekran (orn. Hiz
+    // Testi) ayni cihaza tekrar baglanmaya calistiginda libaums "mesgul"
+    // hatasi verir ve o ekranlarda USB hic algilanmamis gibi gorunur.
+    private var openDevice: UsbMassStorageDevice? = null
 
     private val _currentDir = MutableLiveData<UsbFile?>()
     val currentDir: LiveData<UsbFile?> = _currentDir
@@ -52,14 +59,29 @@ class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
             }
             viewModelScope.launch(Dispatchers.IO) {
                 runCatching {
+                    // Onceki ekrandan acik kalmis olabilecek baglantiyi once kapat.
+                    closeCurrentDeviceQuietly()
                     val partition = UsbMassStorageManager.openFirstPartition(device)
                     val fs = partition?.let { UsbMassStorageManager.fileSystemOf(it) }
                     fileSystem = fs
-                    _currentDir.postValue(fs?.rootDirectory)
+                    openDevice = device
+                    val root = fs?.rootDirectory
+                    _currentDir.postValue(root)
+                    // ESKI KOD BURADA dogrudan refresh() CAGIRIYORDU; refresh()
+                    // ise _currentDir.value'yu (henuz postValue'nun ana thread'e
+                    // ULASMADIGI icin HALA ESKI/NULL degeri donduren LiveData
+                    // alanini) okuyup bos oldugunu saniyor, ustune ustluk
+                    // "_files.value = emptyList()" satirini bu ARKA PLAN
+                    // THREAD'INDEN cagiriyordu -> "Cannot invoke setValue on a
+                    // background thread" IstateException'i ile UYGULAMA COKUYORDU.
+                    // Duzeltme: dizini LiveData'dan tekrar OKUMAK yerine,
+                    // elimizdeki GERCEK 'root' degerini DOGRUDAN kullaniyoruz ve
+                    // her yerde postValue() kullaniyoruz.
+                    refreshDir(root)
                 }.onFailure {
                     _statusMessage.postValue("USB'ye bağlanılamadı: ${it.message}")
+                    _files.postValue(emptyList())
                 }
-                refresh()
             }
         }
     }
@@ -78,8 +100,21 @@ class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    /** Ana thread'den (UI olaylarindan) cagrilmasi beklenir. */
     fun refresh() {
-        val dir = _currentDir.value ?: run { _files.value = emptyList(); return }
+        refreshDir(_currentDir.value)
+    }
+
+    /**
+     * KRITIK: Bu fonksiyon HEM ana thread'den HEM arka plan (IO) thread'inden
+     * guvenle cagrilabilir; bu yuzden `_files` icin HER ZAMAN postValue()
+     * kullanilir, asla dogrudan `.value =` atanmaz.
+     */
+    private fun refreshDir(dir: UsbFile?) {
+        if (dir == null) {
+            _files.postValue(emptyList())
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             val children = runCatching { dir.listFiles().toList() }.getOrDefault(emptyList())
             _files.postValue(children.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })))
@@ -188,5 +223,15 @@ class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+    }
+
+    private fun closeCurrentDeviceQuietly() {
+        runCatching { openDevice?.close() }
+        openDevice = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        closeCurrentDeviceQuietly()
     }
 }

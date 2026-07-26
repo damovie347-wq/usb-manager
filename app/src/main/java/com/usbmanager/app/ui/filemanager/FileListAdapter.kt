@@ -40,8 +40,13 @@ class FileListAdapter(
         fun bind(file: UsbFile) {
             binding.textFileName.text = file.name
 
+            // NOT: Klasor icin item sayisini burada ("file.listFiles().size")
+            // HESAPLAMIYORUZ; bu, her satir icin ayri bir USB okumasi (gercek
+            // donanim erisimi) tetikler ve listede COK sayida klasor varken
+            // ana thread'i uzun sure bloke ederek uygulamanin donmasina
+            // (ANR benzeri "asilmis" hisse) yol acabilirdi.
             val meta = if (file.isDirectory) {
-                runCatching { "${file.listFiles().size} öğe" }.getOrDefault("Klasör")
+                "Klasör"
             } else {
                 formatSize(runCatching { file.length }.getOrDefault(0L))
             }

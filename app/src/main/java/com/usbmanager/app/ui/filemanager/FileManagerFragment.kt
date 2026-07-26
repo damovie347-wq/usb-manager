@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.usbmanager.app.R
+import com.usbmanager.app.core.AppPrefs
 import com.usbmanager.app.databinding.FragmentFileManagerBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,6 +53,11 @@ class FileManagerFragment : Fragment() {
         )
         binding.recyclerFiles.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerFiles.adapter = adapter
+        // Ayarlar > Animasyonlar kapaliysa liste ogeleri (ekleme/kaldirma/
+        // secim degisimi) HICBIR gecis animasyonu OLMADAN aninda guncellenir.
+        if (!AppPrefs.animationsEnabled(requireContext())) {
+            binding.recyclerFiles.itemAnimator = null
+        }
 
         binding.fabAdd.setOnClickListener { showCreateFolderDialog() }
         binding.actionCopy.setOnClickListener { viewModel.copySelectedToCopiesFolder() }
