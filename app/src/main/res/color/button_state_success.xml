@@ -1,1 +1,15 @@
-
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ONCEKI DURUM: button_start_test icin android:backgroundTint sabit/duz bir
+    renkti (success_green). MaterialButton, isEnabled=false oldugunda
+    normalde otomatik olarak SOLUKLASMASI gerekirken, SABIT bir renk her
+    zaman ustune ciziliyor; bu yuzden buton FIILEN DEVRE DISI olsa bile
+    GORSEL OLARAK hala "basilabilir/aktif" gorunuyordu; kullanicinin
+    "tusa basiyorum ama hicbir sey olmuyor" seklinde deneyimledigi sorunun
+    bir parcasi buydu. Bu selector, disabled durumunda acikca gri gostererek
+    bu belirsizligi ortadan kaldirir.
+-->
+<selector xmlns:android="http://schemas.android.com/res/android">
+    <item android:color="@color/disabled_grey" android:state_enabled="false" />
+    <item android:color="@color/success_green" />
+</selector>
