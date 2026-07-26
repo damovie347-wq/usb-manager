@@ -75,7 +75,24 @@ class FileManagerFragment : Fragment() {
         })
 
         observeViewModel()
-        viewModel.connectToFirstAvailableDevice()
+        // NOT: ilk baglanti denemesi burada DEGIL, asagidaki onResume()
+        // icinde yapiliyor -- onResume, Fragment yasam donguesunde
+        // onViewCreated'dan HEMEN SONRA (ilk acilista da) zaten calisir; bu
+        // yuzden burada AYRICA cagirmak, iki eszamanli USB baglanti denemesinin
+        // yarismasina (birbirini kesintiye ugratmasina) yol acabilirdi.
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // ONCEKI DAVRANIS: baglanti SADECE ekran ilk acildiginda bir kez
+        // denenirdi; kullanici bu ekrana GELMEDEN ONCE USB'yi takarsa ya da
+        // ilk deneme basarisiz olursa, ekrandan cikip tekrar girmeden (yeni
+        // bir Fragment orneği olusmadan) hicbir yeniden deneme olmuyordu.
+        // Sadece HENUZ BAGLI DEGILKEN yeniden deniyoruz ki dosya gezinme
+        // konumu (hangi klasordeyiz) baska bir ekrandan donuste SIFIRLANMASIN.
+        if (!viewModel.isConnected()) {
+            viewModel.connectToFirstAvailableDevice()
+        }
     }
 
     private fun observeViewModel() {
@@ -92,7 +109,16 @@ class FileManagerFragment : Fragment() {
 
         viewModel.statusMessage.observe(viewLifecycleOwner) { msg ->
             msg ?: return@observe
-            Snackbar.make(binding.root, msg, Snackbar.LENGTH_SHORT).show()
+            Snackbar.make(binding.root, msg, Snackbar.LENGTH_LONG).show()
+            // ONCEKI DAVRANIS: bu mesaj SADECE birkac saniyelik bir Snackbar
+            // olarak gorunurdu; kullanici kacirirsa (orn. USB neden
+            // algilanmadigini gosteren teshis mesaji), ekranda "Bağlı USB
+            // depolama bulunamadı" gibi SABIT/genel bir yazidan baska hicbir
+            // ipucu kalmiyordu. Artik ayni mesaj, baglanti kurulana kadar
+            // EKRANDA KALICI olarak da gosteriliyor.
+            if (viewModel.currentDir.value == null) {
+                binding.textEmptyState.text = msg
+            }
         }
     }
 

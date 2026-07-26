@@ -43,6 +43,9 @@ class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
     private val _statusMessage = MutableLiveData<String?>()
     val statusMessage: LiveData<String?> = _statusMessage
 
+    /** Fragment, mevcut baglanti YOKKEN (ekrana donuldugunde) yeniden denemek icin kullanir. */
+    fun isConnected(): Boolean = fileSystem != null
+
     fun connectToFirstAvailableDevice() {
         val ctx = getApplication<android.app.Application>()
         val device = UsbMassStorageManager.listDevices(ctx).firstOrNull()
@@ -50,6 +53,12 @@ class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
             fileSystem = null
             _currentDir.value = null
             _files.value = emptyList()
+            // ONCEKI DAVRANIS: burada HICBIR mesaj gosterilmiyordu; kullanici
+            // "USB'yi taktim ama uygulama hicbir sey soylemiyor" diye
+            // sikayet ediyordu (bkz. proje notlari). Artik en azindan NEDEN
+            // baglanamadigimizi (sistem bu USB'yi Mass Storage olarak hic
+            // gormuyor) acikca soyluyoruz.
+            _statusMessage.postValue("Bağlı USB depolama bulunamadı. USB/OTG bağlantısını kontrol edip tekrar deneyin.")
             return
         }
         UsbMassStorageManager.requestPermissionIfNeeded(ctx, device.usbDevice) { granted ->
@@ -58,14 +67,45 @@ class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
                 return@requestPermissionIfNeeded
             }
             viewModelScope.launch(Dispatchers.IO) {
-                runCatching {
-                    // Onceki ekrandan acik kalmis olabilecek baglantiyi once kapat.
-                    closeCurrentDeviceQuietly()
-                    val partition = UsbMassStorageManager.openFirstPartition(device)
-                    val fs = partition?.let { UsbMassStorageManager.fileSystemOf(it) }
+                // Onceki ekrandan acik kalmis olabilecek baglantiyi once kapat.
+                closeCurrentDeviceQuietly()
+                try {
+                    // NOT: libaums, tanimadigi bir dosya sistemiyle (exFAT/NTFS)
+                    // karsilastiginda kimi surumlerde `null` partition/fileSystem
+                    // dondurur, kimi surumlerde ise device.init() icinde
+                    // ISTISNA FIRLATIR. Asagida HER IKI durumu da AYNI teshis
+                    // mantigina yonlendiriyoruz ki kullanici HANGI durumda olursa
+                    // olsun dogru mesaji gorsun.
+                    val fs = runCatching {
+                        UsbMassStorageManager.openFirstPartition(device)
+                            ?.let { p -> UsbMassStorageManager.fileSystemOf(p) }
+                    }.getOrNull()
+
+                    if (fs == null) {
+                        // KOK NEDEN: libaums'un genel FileSystem API'si SADECE
+                        // FAT12/16/32 okuyabiliyor (exFAT/NTFS degil -- bkz.
+                        // RawFileSystemSniffer basindaki not). ONCEKI KOD burada
+                        // "Disk bilgisi alınamadı" gibi anlamsiz bir sonuca
+                        // duserdu. Simdi GERCEK dosya sistemini ham sektorden
+                        // tahmin edip DOGRU/EYLEME GECIRILEBILIR bir mesaj
+                        // gosteriyoruz.
+                        runCatching { device.close() }
+                        val detected = UsbMassStorageManager.sniffUnrecognizedFileSystem(ctx, device.usbDevice)
+                        val message = if (detected != null) {
+                            "USB bellek algılandı ama dosya sistemi $detected. Bu sürümün Dosya Yöneticisi'si yalnızca FAT32'yi okuyabiliyor; " +
+                                "Biçimlendir ekranından FAT32'ye çevirirseniz dosyalarınızı burada görebilirsiniz."
+                        } else {
+                            "USB bellek algılandı ama üzerinde okunabilir bir bölüm/dosya sistemi bulunamadı."
+                        }
+                        _statusMessage.postValue(message)
+                        _currentDir.postValue(null)
+                        _files.postValue(emptyList())
+                        return@launch
+                    }
+
                     fileSystem = fs
                     openDevice = device
-                    val root = fs?.rootDirectory
+                    val root = fs.rootDirectory
                     _currentDir.postValue(root)
                     // ESKI KOD BURADA dogrudan refresh() CAGIRIYORDU; refresh()
                     // ise _currentDir.value'yu (henuz postValue'nun ana thread'e
@@ -78,8 +118,8 @@ class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
                     // elimizdeki GERCEK 'root' degerini DOGRUDAN kullaniyoruz ve
                     // her yerde postValue() kullaniyoruz.
                     refreshDir(root)
-                }.onFailure {
-                    _statusMessage.postValue("USB'ye bağlanılamadı: ${it.message}")
+                } catch (t: Throwable) {
+                    _statusMessage.postValue("USB'ye bağlanılamadı: ${t.message}")
                     _files.postValue(emptyList())
                 }
             }
