@@ -73,6 +73,70 @@
                 app:layout_constraintTop_toBottomOf="@id/text_speed_value"
                 tools:text="2.05 Gbit/s" />
 
+            <!--
+                KULLANICI ISTEGI: test dosyasi boyutu SABIT 512 MB DEGIL,
+                secilebilir olsun (yavas diskler icin daha kucuk/hizli bir
+                test de yapilabilsin). "Otomatik" secenegi, bagli USB'nin
+                kapasitesine gore MAKUL bir boyut onerir (bkz. SpeedTestFragment).
+            -->
+            <TextView
+                android:id="@+id/text_size_label"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/speed_test_size_label"
+                android:textColor="?android:attr/textColorSecondary"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/text_speed_mbit" />
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chip_group_test_size"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/text_size_label"
+                app:singleSelection="true">
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_size_auto"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/speed_test_size_auto" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_size_256"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="256 MB" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_size_512"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="512 MB" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_size_1024"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="1 GB" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_size_2048"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="2 GB" />
+            </com.google.android.material.chip.ChipGroup>
+
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_test_info"
                 style="?attr/materialCardViewOutlinedStyle"
@@ -81,7 +145,7 @@
                 android:layout_marginTop="20dp"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/text_speed_mbit">
+                app:layout_constraintTop_toBottomOf="@id/chip_group_test_size">
 
                 <LinearLayout
                     android:layout_width="match_parent"
