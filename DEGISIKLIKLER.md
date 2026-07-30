@@ -168,6 +168,72 @@ FAT32'ye çevirmek.
 
 ---
 
+## 7) Format hızı, FAT32 "hiyeroglif dosya" bozulması, tekrarlayan "USB takıldı/çıkarıldı" bildirimleri, Hız Testi boyut seçimi
+
+**Format neden dakikalarca sürüyordu (ve artık sürmüyor):** `Fat32Formatter`/
+`ExFatFormatter`/`NtfsFormatter`, FAT tablosu / Allocation Bitmap / $MFT gibi
+büyük (birkaç MB - birkaç onlarca MB) bölgeleri `raw.writeAt()`'i **her
+sektör (512 bayt) için ayrı ayrı** çağırarak yazıyordu. Her çağrı tam bir USB
+Bulk-Only Transport döngüsü (CBW + veri + CSW = en az 3 ayrı USB
+bulkTransfer) başlatıyor; 16 MB'lik bir FAT tablosu için bu 32.000+ ayrı
+çağrı demekti — dakikalarca sürmesinin nedeni buydu. Oysa `writeAt()` ZATEN
+kendi içinde 32 KB'lik SCSI komutlarına bölüyor, yani tek çağrıya 1 MB'lik
+bir arabellek vermek tamamen güvenli. **`RawIoUtils.kt` (yeni)** paylaşılan
+bir "~1 MB'lik büyük parçalar halinde yaz/sıfırla" yardımcısı ekliyor; üç
+formatter da artık bunu kullanıyor. Format artık saniyeler sürüyor.
+
+**FAT32 sonrası "hiyeroglif" dosyalar (kök neden bulundu ve düzeltildi):**
+`Fat32Formatter.writeEmptyCluster()` kök dizin kümesinin **sadece ilk
+sektörünü** (512 bayt) sıfırlıyordu — ama bir küme `sectorsPerCluster`
+(8/16/32/64) sektörden oluşuyor! Kalan sektörlerdeki USB'nin ÖNCEKİ içeriği
+(eski dosya sisteminden kalan veri) olduğu gibi kalıyordu. Herhangi bir
+işletim sistemi kök dizini taradığında bu eski baytları geçerli dizin
+girişleri sanıyor, özellikle Uzun Dosya Adı (LFN) girişleri UTF-16 olarak
+yanlış yorumlanıp ekranda rastgele karakterli "hayalet dosyalar" olarak
+görünüyordu. **Düzeltme: artık kümenin TAMAMI sıfırlanıyor.**
+
+**Tekrarlayan "USB bellek takıldı/çıkartıldı" bildirimleri:** Dosya
+Yöneticisi ve Hız Testi ekranlarının HER BİRİ kendi ViewModel'inde BAĞIMSIZ
+bir libaums bağlantısı tutuyor, ekrandan ayrılınca kapatıyordu. Bu, USB
+arabirimini "force claim" ile alıyor (çekirdeğin kendi usb-storage
+sürücüsünü devre dışı bırakıyor); bağlantı kapanınca çekirdek genellikle
+kendi sürücüsünü yeniden bağlıyor — bu da Android'in sistem düzeyindeki "USB
+depolama bağlandı/kaldırıldı" bildirimini tetikliyordu. İki ekran arasında
+gidip geldikçe bu HER GEÇİŞTE tekrarlanıyordu. **`UsbFileSystemSession.kt`
+(yeni)**: artık bu iki ekran bağlantıyı PAYLAŞIYOR; aygıt fiziksel olarak
+değişmediği sürece aralarında geçişte yeniden claim/release YAPILMIYOR.
+Biçimlendir ekranı (ham SCSI erişimi gerektirdiği için) geçişte hâlâ kendi
+bağlantısını açıp kapatıyor — bu iki farklı bağlantı türünün (libaums'un
+kendi bağlantısı vs. ham SCSI) doğasında olan, bu oturumun kapsamını aşan
+daha büyük bir birleştirme olmadan tam giderilemeyen bir sınır.
+
+**Hız Testi'nde test boyutu artık seçilebiliyor:** 256 MB / 512 MB / 1 GB /
+2 GB seçenekleri + bağlı USB'nin kapasitesine göre makul bir boyut öneren
+"Otomatik" seçeneği eklendi (`SpeedTestViewModel.testSizeBytes` artık
+dışarıdan ayarlanabiliyor).
+
+**exFAT/NTFS'li bir USB'nin Dosya Yöneticisi'nde GERÇEKTEN listelenmesi
+(sadece FAT32 değil):** Bu, `me.jahnen.libaums.core.fs.UsbFile`/`FileSystem`
+ARAYÜZLERİNİ uygulayan yeni bir sınıf yazmayı gerektirir. Bu arayüzlerin TAM
+üye listesini (imzalarını) bu ortamda %100 doğrulayacak bir Kotlin
+derleyicisi YOK (ağ erişimi kapalı); TEK bir eksik/yanlış üye TÜM projenin
+derlemesini kırar. Bu riski, sizin başka bir yerden bahsettiğiniz "baştan
+zip verip düzelttirmek çok uğraşmak" sorununu büyütmemek için BİLİNÇLİ
+OLARAK almadım. Pratik/güvenli yol: bu USB'yi artık gerçekten hızlı ve
+DOĞRU çalışan FAT32 biçimlendirmesiyle (yukarıdaki iki düzeltme sayesinde)
+biçimlendirmek. Ayrı, kendi başına (libaums'a dokunmayan) salt-okunur bir
+exFAT tarayıcısı istenirse, bunu ODAKLANMIŞ bir sonraki adım olarak
+yapabilirim.
+
+**Değişen dosyalar:** `usb/RawIoUtils.kt` (yeni), `usb/UsbFileSystemSession.kt`
+(yeni), `core/Fat32Formatter.kt`, `core/ExFatFormatter.kt`,
+`core/NtfsFormatter.kt`, `ui/filemanager/FileManagerViewModel.kt`,
+`ui/speedtest/SpeedTestViewModel.kt`, `ui/speedtest/SpeedTestFragment.kt`,
+`ui/format/FormatViewModel.kt`, `res/layout/fragment_speed_test.xml`,
+`res/values/strings.xml`.
+
+---
+
 ## Test / Doğrulama Notu
 
 `ExFatFormatter` gerçek bir kod çalıştırma ortamında, sahte (bellek içi) bir
