@@ -12,6 +12,7 @@ import com.usbmanager.app.core.FormatMode
 import com.usbmanager.app.core.FormatProgress
 import com.usbmanager.app.core.FormatResult
 import com.usbmanager.app.usb.ScsiRawBlockDevice
+import com.usbmanager.app.usb.UsbFileSystemSession
 import com.usbmanager.app.usb.UsbMassStorageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -66,6 +67,10 @@ class FormatViewModel(app: Application) : AndroidViewModel(app) {
             viewModelScope.launch {
                 val info = withContext(Dispatchers.IO) {
                     runCatching {
+                        // Dosya Yoneticisi/Hiz Testi'nin PAYLASILAN libaums
+                        // baglantisi aciksa, HAM erisimden once serbest birak
+                        // (ayni arabirime iki baglanti turu AYNI ANDA olamaz).
+                        UsbFileSystemSession.releaseForExclusiveAccess()
                         val raw = ScsiRawBlockDevice.open(ctx, usbDevice)
                         val capacity = raw.totalBytes
                         raw.close()
@@ -92,6 +97,7 @@ class FormatViewModel(app: Application) : AndroidViewModel(app) {
             val res = withContext(Dispatchers.IO) {
                 var opened: ScsiRawBlockDevice? = null
                 try {
+                    UsbFileSystemSession.releaseForExclusiveAccess()
                     val raw = ScsiRawBlockDevice.open(ctx, info.usbDevice)
                     opened = raw
                     FormatEngine.run(raw, fs, mode) { progress ->
