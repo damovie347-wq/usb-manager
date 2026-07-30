@@ -1,6 +1,7 @@
 package com.usbmanager.app.core
 
 import com.usbmanager.app.usb.RawBlockDevice
+import com.usbmanager.app.usb.RawIoUtils
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.random.Random
@@ -629,38 +630,19 @@ object NtfsFormatter {
     private fun zeroFillClusters(
         raw: RawBlockDevice, startCluster: Long, clusterCount: Long, onProgress: (Int) -> Unit
     ) {
-        val chunkClusters = 256L // ~1 MB'lik parcalar
-        val chunkBytes = (chunkClusters * CLUSTER_SIZE).toInt()
-        val zero = ByteBuffer.allocate(chunkBytes)
-        var done = 0L
-        while (done < clusterCount) {
-            val thisClusters = minOf(chunkClusters, clusterCount - done)
-            val thisBytes = (thisClusters * CLUSTER_SIZE).toInt()
-            zero.rewind(); zero.limit(thisBytes)
-            raw.writeAt((startCluster + done) * CLUSTER_SIZE, zero)
-            zero.limit(zero.capacity())
-            done += thisClusters
-            onProgress(((done * 100) / clusterCount).toInt().coerceIn(0, 100))
-        }
+        RawIoUtils.zeroFill(raw, startCluster * CLUSTER_SIZE, clusterCount * CLUSTER_SIZE, onProgress = onProgress)
     }
 
+    /**
+     * KRITIK PERFORMANS DUZELTMESI: bu fonksiyon ONCEDEN icerigi 512 bayt/cagri
+     * (`writeBytesAt`) yaziyordu -- buyuk bir $Bitmap icin (ozellikle genis
+     * hacimlerde) binlerce ayri USB komut dongusu, yani DAKIKALARCA surme
+     * demekti. Artik RawIoUtils ile ~1 MB'lik BUYUK parcalar halinde (bkz.
+     * RawIoUtils.kt basindaki not) -- aynisi artik saniyeler suruyor.
+     */
     private fun writeClusterData(raw: RawBlockDevice, startCluster: Long, clusterCount: Long, data: ByteArray) {
         val fullSize = (clusterCount * CLUSTER_SIZE).toInt()
         val padded = if (data.size == fullSize) data else data.copyOf(fullSize)
-        writeBytesAt(raw, startCluster * SECTORS_PER_CLUSTER, padded)
-    }
-
-    private fun writeBytesAt(raw: RawBlockDevice, startSector: Long, data: ByteArray) {
-        var offset = 0
-        var sector = startSector
-        while (offset < data.size) {
-            val chunkSize = minOf(SECTOR_SIZE, data.size - offset)
-            val buf = ByteBuffer.allocate(SECTOR_SIZE)
-            buf.put(data, offset, chunkSize)
-            buf.rewind()
-            raw.writeAt(sector * SECTOR_SIZE, buf)
-            offset += chunkSize
-            sector++
-        }
+        RawIoUtils.writeBulk(raw, startCluster * CLUSTER_SIZE, padded)
     }
 }

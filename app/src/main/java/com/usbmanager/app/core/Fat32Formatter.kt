@@ -1,6 +1,7 @@
 package com.usbmanager.app.core
 
 import com.usbmanager.app.usb.RawBlockDevice
+import com.usbmanager.app.usb.RawIoUtils
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.random.Random
@@ -77,8 +78,11 @@ object Fat32Formatter {
         writeFatTable(raw, firstFatSector, fatSize, onProgress, progressStart = 35, progressEnd = 65)
         writeFatTable(raw, secondFatSector, fatSize, onProgress, progressStart = 65, progressEnd = 90)
 
-        // 6) Bos kok dizini (root dir), tek cluster, tamami sifir
-        writeEmptyCluster(raw, dataStartSector.toLong())
+        // 6) Bos kok dizini (root dir): TUM kume (sectorsPerCluster sektor)
+        //    SIFIRLANIR -- bkz. writeEmptyCluster() basindaki KRITIK duzeltme
+        //    notu (onceki kod sadece 1 SEKTOR yaziyordu, kalan sektorlerdeki
+        //    ONCEKI icerik "hiyeroglif" dosya adlari olarak goruluyordu).
+        writeEmptyCluster(raw, dataStartSector.toLong(), sectorsPerCluster)
         onProgress(100)
     }
 
@@ -199,27 +203,31 @@ object Fat32Formatter {
         first.rewind()
         raw.writeAt(startSector * SECTOR_SIZE, first)
 
-        // Kalan sektorler: tamami sifir (bos FAT girisleri)
-        val zero = ByteBuffer.allocate(SECTOR_SIZE)
-        var s = startSector + 1
-        val end = startSector + fatSizeSectors
-        val totalToWrite = (end - s).coerceAtLeast(0)
-        var written = 0L
-        while (s < end) {
-            zero.rewind()
-            raw.writeAt(s * SECTOR_SIZE, zero)
-            s++
-            written++
-            if (totalToWrite > 0 && written % 512 == 0L) {
-                val pct = progressStart + ((written * (progressEnd - progressStart)) / totalToWrite).toInt()
-                onProgress(pct.coerceIn(progressStart, progressEnd))
-            }
-        }
+        // KRITIK PERFORMANS DUZELTMESI: kalan sektorler (bos FAT girisleri)
+        // ONCEDEN tek tek (512 bayt/cagri) yaziliyordu -- 16 MB'lik bir FAT
+        // tablosu icin 32.000+ ayri USB komut dongusu demekti (dakikalarca
+        // surer). Artik RawIoUtils ile ~1 MB'lik BUYUK parcalar halinde
+        // yaziliyor (bkz. RawIoUtils.kt basindaki not) -- ayni islem artik
+        // saniyeler suruyor.
+        val remainingSectors = (fatSizeSectors - 1).coerceAtLeast(0)
+        RawIoUtils.zeroFill(
+            raw, (startSector + 1) * SECTOR_SIZE, remainingSectors * SECTOR_SIZE
+        ) { pct -> onProgress((progressStart + (pct * (progressEnd - progressStart) / 100)).coerceIn(progressStart, progressEnd)) }
         onProgress(progressEnd)
     }
 
-    private fun writeEmptyCluster(raw: RawBlockDevice, startSector: Long) {
-        val zero = ByteBuffer.allocate(SECTOR_SIZE)
-        raw.writeAt(startSector * SECTOR_SIZE, zero)
+    /**
+     * KRITIK DUZELTME: bu fonksiyon ONCEDEN kok dizin kumesinin SADECE ILK
+     * SEKTORUNU (512 bayt) sifirliyordu -- ama bir kume `sectorsPerCluster`
+     * (8/16/32/64) SEKTORDEN olusur! Kalan sektorlerdeki ONCEKI icerik
+     * (USB'nin daha once uzerinde ne varsa) OLDUGU GIBI kaliyordu. Herhangi
+     * bir isletim sistemi kok dizini taradiginda, bu sifirlanmamis "eski"
+     * baytlari GECERLI (ya da yari-gecerli) dizin girisleri sanip, ozellikle
+     * Uzun Dosya Adi (LFN) girisleri UTF-16 olarak yanlis yorumlanip EKRANDA
+     * "hiyeroglif" gibi rastgele karakterli "hayalet dosyalar" olarak
+     * goruluyordu. Duzeltme: KUMENIN TAMAMINI sifirla.
+     */
+    private fun writeEmptyCluster(raw: RawBlockDevice, startSector: Long, sectorsPerCluster: Int) {
+        RawIoUtils.zeroFill(raw, startSector * SECTOR_SIZE, sectorsPerCluster.toLong() * SECTOR_SIZE)
     }
 }

@@ -1,6 +1,7 @@
 package com.usbmanager.app.core
 
 import com.usbmanager.app.usb.RawBlockDevice
+import com.usbmanager.app.usb.RawIoUtils
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.random.Random
@@ -268,20 +269,12 @@ object ExFatFormatter {
         head.rewind()
         raw.writeAt(fatOffset * SECTOR_SIZE, head)
 
-        // Geri kalan FAT sektorleri: tamami sifir (bos kumeler)
-        val zero = ByteBuffer.allocate(SECTOR_SIZE)
-        var s = fatOffset + 2
-        val end = fatOffset + fatLengthSectors
-        val total = (end - s).coerceAtLeast(0)
-        var written = 0L
-        while (s < end) {
-            zero.rewind()
-            raw.writeAt(s * SECTOR_SIZE, zero)
-            s++
-            written++
-            if (total > 0 && written % 2048 == 0L) {
-                onProgress(((written * 100) / total).toInt().coerceIn(0, 100))
-            }
+        // Geri kalan FAT sektorleri: tamami sifir (bos kumeler). KRITIK
+        // PERFORMANS DUZELTMESI: bu ONCEDEN 512 bayt/cagri yaziliyordu (bkz.
+        // RawIoUtils.kt basindaki not) -- artik ~1 MB'lik parcalar halinde.
+        val remaining = (fatLengthSectors - 2).coerceAtLeast(0)
+        RawIoUtils.zeroFill(raw, (fatOffset + 2) * SECTOR_SIZE, remaining * SECTOR_SIZE) { pct ->
+            onProgress(pct)
         }
         onProgress(100)
     }
@@ -365,20 +358,9 @@ object ExFatFormatter {
     private fun writeClusterData(raw: RawBlockDevice, startSector: Long, sectorCount: Long, data: ByteArray) {
         val fullSize = (sectorCount * SECTOR_SIZE).toInt()
         val padded = data.copyOf(fullSize) // fazla kisim otomatik 0 ile doldurulur
-        writeBytesAtSector(raw, startSector, padded)
-    }
-
-    private fun writeBytesAtSector(raw: RawBlockDevice, startSector: Long, data: ByteArray) {
-        var offset = 0
-        var sector = startSector
-        while (offset < data.size) {
-            val chunkSize = minOf(SECTOR_SIZE, data.size - offset)
-            val buf = ByteBuffer.allocate(SECTOR_SIZE)
-            buf.put(data, offset, chunkSize)
-            buf.rewind()
-            raw.writeAt(sector * SECTOR_SIZE, buf)
-            offset += chunkSize
-            sector++
-        }
+        // KRITIK PERFORMANS DUZELTMESI: ONCEDEN 512 bayt/cagri yaziliyordu
+        // (buyuk bir Allocation Bitmap icin binlerce cagri); artik RawIoUtils
+        // ile ~1 MB'lik BUYUK parcalar halinde (bkz. RawIoUtils.kt notu).
+        RawIoUtils.writeBulk(raw, startSector * SECTOR_SIZE, padded)
     }
 }
