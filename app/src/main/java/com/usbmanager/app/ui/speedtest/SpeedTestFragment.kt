@@ -33,7 +33,21 @@ class SpeedTestFragment : Fragment() {
 
         binding.speedometer.setMaxSpeed(600.0) // USB 3.x icin makul ust sinir
         binding.speedometer.animateChanges = AppPrefs.animationsEnabled(requireContext())
-        binding.textTestSize.text = "512 MB"
+
+        // KULLANICI ISTEGI: test dosyasi boyutu ARTIK SABIT 512 MB DEGIL,
+        // secilebilir (yavas bir disk icin daha kucuk/hizli bir test de
+        // yapilabilsin). "Otomatik" secildiginde, bagli USB'nin kapasitesine
+        // gore MAKUL bir boyut hesaplanir (bkz. applyAutoSize()).
+        applySizeSelection(viewModel.testSizeBytes)
+        binding.chipGroupTestSize.setOnCheckedStateChangeListener { _, checkedIds ->
+            when (checkedIds.firstOrNull()) {
+                R.id.chip_size_auto -> applyAutoSize()
+                R.id.chip_size_256 -> applySizeSelection(256L * 1024 * 1024)
+                R.id.chip_size_512 -> applySizeSelection(512L * 1024 * 1024)
+                R.id.chip_size_1024 -> applySizeSelection(1024L * 1024 * 1024)
+                R.id.chip_size_2048 -> applySizeSelection(2048L * 1024 * 1024)
+            }
+        }
 
         // KULLANICI ISTEGI: CrystalDiskMark tarzi TEK TUS -> yazma + okuma
         // OTOMATIK VE SIRAYLA calisir; ayri "yazma testi" / "okuma testi"
@@ -77,6 +91,10 @@ class SpeedTestFragment : Fragment() {
             binding.buttonStartTest.text = getString(
                 if (running) R.string.speed_stop else R.string.speed_start
             )
+            binding.chipGroupTestSize.isEnabled = !running
+            for (i in 0 until binding.chipGroupTestSize.childCount) {
+                binding.chipGroupTestSize.getChildAt(i).isEnabled = !running
+            }
             if (!running) {
                 binding.buttonStartTest.isEnabled = viewModel.deviceReady.value == true
             }
@@ -88,6 +106,11 @@ class SpeedTestFragment : Fragment() {
                 binding.textPhase.text = getString(
                     if (ready) R.string.speed_phase_idle else R.string.speed_phase_no_device
                 )
+            }
+            // Aygit yeni baglandiginda/kapasitesi artik bilindiginde, "Otomatik"
+            // secili ise onerilen boyutu GERCEK kapasiteye gore yeniden hesapla.
+            if (ready && binding.chipGroupTestSize.checkedChipId == R.id.chip_size_auto) {
+                applyAutoSize()
             }
         }
 
@@ -133,6 +156,38 @@ class SpeedTestFragment : Fragment() {
                 null -> Unit
             }
         }
+    }
+
+    private fun applySizeSelection(bytes: Long) {
+        viewModel.testSizeBytes = bytes
+        binding.textTestSize.text = formatSize(bytes)
+    }
+
+    /**
+     * "Otomatik": bagli USB'nin TOPLAM KAPASITESine gore MAKUL bir test
+     * boyutu onerir -- kucuk/yavas bir bellekte 512 MB'lik sabit bir test
+     * hem cok uzun surebilir hem de kapasitenin cok buyuk bir kismini
+     * kaplayabilir. Kaba kural: kapasitenin ~%2'si, 64 MB ile 2 GB arasinda
+     * sinirlanir ve 64 MB'in katlarina yuvarlanir. Kapasite HENUZ
+     * bilinmiyorsa (aygit hazir degilse) varsayilan 512 MB'de kalir.
+     */
+    private fun applyAutoSize() {
+        val capacity = viewModel.currentCapacityBytes()
+        val bytes = if (capacity != null && capacity > 0) {
+            val step = 64L * 1024 * 1024
+            val raw = (capacity / 50).coerceIn(64L * 1024 * 1024, 2048L * 1024 * 1024)
+            (raw / step) * step
+        } else {
+            512L * 1024 * 1024
+        }
+        viewModel.testSizeBytes = bytes
+        binding.textTestSize.text = "${formatSize(bytes)} (${getString(R.string.speed_test_size_auto)})"
+    }
+
+    private fun formatSize(bytes: Long): String = if (bytes >= 1024L * 1024 * 1024) {
+        String.format(Locale.getDefault(), "%.1f GB", bytes / (1024.0 * 1024 * 1024))
+    } else {
+        String.format(Locale.getDefault(), "%d MB", bytes / (1024 * 1024))
     }
 
     private fun resetResultsOnly() {

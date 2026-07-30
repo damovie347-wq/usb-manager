@@ -7,28 +7,24 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.usbmanager.app.core.SpeedTestEngine
 import com.usbmanager.app.core.SpeedTestUpdate
+import com.usbmanager.app.usb.UsbFileSystemSession
 import com.usbmanager.app.usb.UsbMassStorageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import me.jahnen.libaums.core.UsbMassStorageDevice
 import me.jahnen.libaums.core.fs.FileSystem
 
 class SpeedTestViewModel(app: Application) : AndroidViewModel(app) {
 
+    // ARTIK disaridan (kullanicinin secimine gore) degistirilebiliyor --
+    // bkz. SpeedTestFragment'teki boyut secici (256 MB / 512 MB / 1 GB / 2 GB).
     var testSizeBytes: Long = 512L * 1024 * 1024
-        private set
 
+    // ARTIK bu ViewModel kendi USB baglantisini AYRICA ACIP KAPAMIYOR;
+    // paylasilan `UsbFileSystemSession`i kullaniyor (bkz. o dosyadaki KOK
+    // NEDEN aciklamasi -- "her ekran degisiminde USB takildi/cikartildi"
+    // bildirimlerinin gercek nedeni buydu).
     private var fileSystem: FileSystem? = null
-
-    // KRITIK DUZELTME: acik baglantiyi tutup ekran kapaninca kapatiyoruz.
-    // ONCEKI DAVRANIS: Dosya Yoneticisi (veya baska bir ekran) USB baglantisini
-    // ACIK BIRAKIYORDU (hicbir yerde close() cagrilmiyordu). Kullanici sonra
-    // Hiz Testi ekranina geçtiginde, libaums cihazi "zaten kullanimda" bulup
-    // baglanti kuramiyor, bu da "deviceReady" hep false kaliyor ve "Testi
-    // Baslat" tusu SUREKLI DEVRE DISI (isEnabled=false) kaliyordu -- kullanici
-    // bunu "tusun hicbir islevi yok / basilmiyor" olarak deneyimliyordu.
-    private var openDevice: UsbMassStorageDevice? = null
     private var job: Job? = null
 
     private val _isRunning = MutableLiveData(false)
@@ -46,6 +42,9 @@ class SpeedTestViewModel(app: Application) : AndroidViewModel(app) {
     /** Fragment, mevcut baglanti YOKKEN (ekrana donuldugunde) yeniden denemek icin kullanir. */
     fun isConnected(): Boolean = fileSystem != null
 
+    /** Fragment, "Otomatik" boyut secenegi icin bagli aygitin kapasitesini okur. */
+    fun currentCapacityBytes(): Long? = runCatching { fileSystem?.capacity }.getOrNull()
+
     fun connectToFirstAvailableDevice() {
         val ctx = getApplication<android.app.Application>()
         val device = UsbMassStorageManager.listDevices(ctx).firstOrNull()
@@ -58,6 +57,16 @@ class SpeedTestViewModel(app: Application) : AndroidViewModel(app) {
             _statusMessage.postValue("Bağlı USB depolama bulunamadı.")
             return
         }
+
+        // PAYLASILAN oturumda AYNI aygita zaten acik bir baglanti varsa,
+        // arabirimi tekrar claim/release ETMEDEN dogrudan onu kullan (bkz.
+        // UsbFileSystemSession.kt basindaki KOK NEDEN aciklamasi).
+        UsbFileSystemSession.existingFor(device.usbDevice)?.let { fs ->
+            fileSystem = fs
+            _deviceReady.value = true
+            return
+        }
+
         UsbMassStorageManager.requestPermissionIfNeeded(ctx, device.usbDevice) { granted ->
             if (!granted) {
                 _deviceReady.value = false
@@ -65,9 +74,6 @@ class SpeedTestViewModel(app: Application) : AndroidViewModel(app) {
                 return@requestPermissionIfNeeded
             }
             viewModelScope.launch(Dispatchers.IO) {
-                // Baska bir ekranin acik birakmis olabilecegi onceki
-                // baglantiyi once kapat (bkz. yukaridaki not).
-                closeCurrentDeviceQuietly()
                 val fs = runCatching {
                     UsbMassStorageManager.openFirstPartition(device)
                         ?.let { p -> UsbMassStorageManager.fileSystemOf(p) }
@@ -86,10 +92,11 @@ class SpeedTestViewModel(app: Application) : AndroidViewModel(app) {
                         else
                             "USB bellek algılandı ama üzerinde okunabilir bir bölüm/dosya sistemi bulunamadı."
                     )
+                } else {
+                    UsbFileSystemSession.adopt(device.usbDevice, device, fs)
                 }
 
                 fileSystem = fs
-                openDevice = if (fs != null) device else null
                 _deviceReady.postValue(fs != null)
             }
         }
@@ -110,13 +117,6 @@ class SpeedTestViewModel(app: Application) : AndroidViewModel(app) {
         _isRunning.value = false
     }
 
-    private fun closeCurrentDeviceQuietly() {
-        runCatching { openDevice?.close() }
-        openDevice = null
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        closeCurrentDeviceQuietly()
-    }
+    // NOT: burada artik `onCleared()` icinde baglantiyi KAPATMIYORUZ -- bkz.
+    // FileManagerViewModel'deki ayni not.
 }
