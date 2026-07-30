@@ -5,11 +5,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.usbmanager.app.usb.UsbFileSystemSession
 import com.usbmanager.app.usb.UsbMassStorageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import me.jahnen.libaums.core.UsbMassStorageDevice
 import me.jahnen.libaums.core.fs.FileSystem
 import me.jahnen.libaums.core.fs.UsbFile
 import me.jahnen.libaums.core.fs.UsbFileInputStream
@@ -23,13 +23,11 @@ data class DiskInfo(
 
 class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
 
+    // ARTIK bu ViewModel kendi USB baglantisini AYRICA ACIP KAPAMIYOR;
+    // paylasilan `UsbFileSystemSession`i kullaniyor (bkz. o dosyadaki KOK
+    // NEDEN aciklamasi -- "her ekran degisiminde USB takildi/cikartildi"
+    // bildirimlerinin gercek nedeni buydu).
     private var fileSystem: FileSystem? = null
-
-    // KRITIK DUZELTME: acik USB baglantisini tutuyoruz ki ekran kapaninca
-    // (onCleared) kapatabilelim. Kapatilmazsa, baska bir ekran (orn. Hiz
-    // Testi) ayni cihaza tekrar baglanmaya calistiginda libaums "mesgul"
-    // hatasi verir ve o ekranlarda USB hic algilanmamis gibi gorunur.
-    private var openDevice: UsbMassStorageDevice? = null
 
     private val _currentDir = MutableLiveData<UsbFile?>()
     val currentDir: LiveData<UsbFile?> = _currentDir
@@ -61,14 +59,25 @@ class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
             _statusMessage.postValue("Bağlı USB depolama bulunamadı. USB/OTG bağlantısını kontrol edip tekrar deneyin.")
             return
         }
+
+        // PAYLASILAN oturumda AYNI aygita zaten acik bir baglanti varsa,
+        // arabirimi tekrar claim/release ETMEDEN dogrudan onu kullan (bkz.
+        // UsbFileSystemSession.kt basindaki KOK NEDEN aciklamasi -- bu, "her
+        // ekran degisiminde USB takildi/cikartildi" sorununun asil duzeltmesi).
+        UsbFileSystemSession.existingFor(device.usbDevice)?.let { fs ->
+            fileSystem = fs
+            val root = fs.rootDirectory
+            _currentDir.value = root
+            refreshDir(root)
+            return
+        }
+
         UsbMassStorageManager.requestPermissionIfNeeded(ctx, device.usbDevice) { granted ->
             if (!granted) {
                 _statusMessage.postValue("USB erişim izni verilmedi")
                 return@requestPermissionIfNeeded
             }
             viewModelScope.launch(Dispatchers.IO) {
-                // Onceki ekrandan acik kalmis olabilecek baglantiyi once kapat.
-                closeCurrentDeviceQuietly()
                 try {
                     // NOT: libaums, tanimadigi bir dosya sistemiyle (exFAT/NTFS)
                     // karsilastiginda kimi surumlerde `null` partition/fileSystem
@@ -103,8 +112,8 @@ class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
                         return@launch
                     }
 
+                    UsbFileSystemSession.adopt(device.usbDevice, device, fs)
                     fileSystem = fs
-                    openDevice = device
                     val root = fs.rootDirectory
                     _currentDir.postValue(root)
                     // ESKI KOD BURADA dogrudan refresh() CAGIRIYORDU; refresh()
@@ -265,13 +274,9 @@ class FileManagerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun closeCurrentDeviceQuietly() {
-        runCatching { openDevice?.close() }
-        openDevice = null
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        closeCurrentDeviceQuietly()
-    }
+    // NOT: burada artik `onCleared()` icinde baglantiyi KAPATMIYORUZ --
+    // baglanti PAYLASILAN oturuma (UsbFileSystemSession) ait; bu ekrandan
+    // ayrilmak, baska bir ekranin (orn. Hiz Testi) HALA kullaniyor olabilecegi
+    // baglantiyi koparmamali. Baglanti sadece aygit degistiginde/koptugunda
+    // ya da Biçimlendir ekrani ham erisim icin arabirimi istedigi zaman kapanir.
 }
