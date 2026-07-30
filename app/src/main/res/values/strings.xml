@@ -37,6 +37,8 @@
     <string name="speed_start">TESTİ BAŞLAT</string>
     <string name="speed_stop">TESTİ DURDUR</string>
     <string name="speed_test_file">Test Dosyası</string>
+    <string name="speed_test_size_label">Test Boyutu</string>
+    <string name="speed_test_size_auto">Otomatik</string>
     <string name="speed_duration">Süre</string>
     <string name="speed_write_speed">Yazma Hızı</string>
     <string name="speed_read_speed">Okuma Hızı</string>
