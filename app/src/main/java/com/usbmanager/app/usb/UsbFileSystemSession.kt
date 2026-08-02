@@ -19,17 +19,26 @@ import me.jahnen.libaums.core.fs.FileSystem
  * Duzeltme: bu iki ekran artik BAGIMSIZ baglanti tutmuyor, bu PAYLASILAN
  * oturumu kullaniyor. Aygit FIZIKSEL olarak degismedigi surece baglanti
  * ekranlar arasi yeniden kullanilir; sadece GERCEKTEN gerektiginde (aygit
- * degisti/koptu ya da Biçimlendir ekrani arabirimi HAM erisim icin
- * istedigi zaman -- bkz. `releaseForExclusiveAccess()`) kapatilip yeniden
- * acilir.
+ * degisti/koptu ya da Biçimlendir/Bootable ekrani arabirimi HAM erisim
+ * icin istedigi zaman -- bkz. `releaseForExclusiveAccess()`) kapatilip
+ * yeniden acilir.
+ *
+ * NTFS/exFAT icin de (libaums bunlari ANLAMADIGI icin -- bkz.
+ * RawFileSystemSniffer) Dosya Yoneticisi artik `ExFatReader`/`NtfsReader`
+ * ile HAM bir okuyucu acabiliyor; bu baglanti da AYNI arabirimi claim
+ * ettiginden, AYNI paylasim/serbest-birakma disiplinine (bu nesne
+ * uzerinden) tabidir -- yoksa Bootable/Biçimlendir ekranlarina gecerken
+ * "Bootable donuyor" hatasiyla AYNI turden bir arabirim celismesi
+ * (bkz. IsoWriterViewModel.kt) burada da olusurdu.
  */
 object UsbFileSystemSession {
 
     private var device: UsbMassStorageDevice? = null
     private var fileSystem: FileSystem? = null
+    private var rawReader: RawVolumeReader? = null
     private var deviceId: Int? = null
 
-    /** Zaten AYNI fiziksel aygita acik bir oturum varsa (ac/kapa YAPMADAN) dondurur. */
+    /** Zaten AYNI fiziksel aygita acik bir libaums oturumu varsa (ac/kapa YAPMADAN) dondurur. */
     @Synchronized
     fun existingFor(usbDevice: UsbDevice): FileSystem? =
         if (fileSystem != null && deviceId == usbDevice.deviceId) fileSystem else null
@@ -38,25 +47,44 @@ object UsbFileSystemSession {
     fun adopt(usbDevice: UsbDevice, massStorageDevice: UsbMassStorageDevice, fs: FileSystem) {
         // Farkli bir aygit/baglanti zaten aciksa, once onu kapat.
         if (device !== massStorageDevice) runCatching { device?.close() }
+        runCatching { rawReader?.close() }
+        rawReader = null
         device = massStorageDevice
         fileSystem = fs
         deviceId = usbDevice.deviceId
     }
 
+    /** Zaten AYNI fiziksel aygita acik bir NTFS/exFAT ham okuyucu oturumu varsa dondurur. */
+    @Synchronized
+    fun existingRawReaderFor(usbDeviceId: Int): RawVolumeReader? =
+        if (rawReader != null && deviceId == usbDeviceId) rawReader else null
+
+    @Synchronized
+    fun adoptRawReader(usbDeviceId: Int, reader: RawVolumeReader) {
+        runCatching { device?.close() }
+        device = null
+        fileSystem = null
+        if (rawReader !== reader) runCatching { rawReader?.close() }
+        rawReader = reader
+        deviceId = usbDeviceId
+    }
+
     /**
-     * Biçimlendir ekrani gibi HAM (raw) SCSI erisimi gereken bir islemden
-     * ONCE cagrilmalidir -- ayni USB arabirimine iki AYRI baglanti turu
-     * (libaums'un kendi baglantisi + ham ScsiRawBlockDevice) AYNI ANDA
-     * acik OLAMAZ.
+     * Biçimlendir/Bootable ekrani gibi HAM (raw) SCSI erisimi gereken bir
+     * islemden ONCE cagrilmalidir -- ayni USB arabirimine iki AYRI baglanti
+     * turu (libaums'un kendi baglantisi veya bu oturumun NTFS/exFAT
+     * okuyucusu + ham ScsiRawBlockDevice) AYNI ANDA acik OLAMAZ.
      */
     @Synchronized
     fun releaseForExclusiveAccess() {
         runCatching { device?.close() }
+        runCatching { rawReader?.close() }
         device = null
         fileSystem = null
+        rawReader = null
         deviceId = null
     }
 
     @Synchronized
-    fun isOpenFor(usbDeviceId: Int): Boolean = fileSystem != null && deviceId == usbDeviceId
+    fun isOpenFor(usbDeviceId: Int): Boolean = (fileSystem != null || rawReader != null) && deviceId == usbDeviceId
 }

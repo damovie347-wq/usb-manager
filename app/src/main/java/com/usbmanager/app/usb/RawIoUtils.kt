@@ -24,6 +24,27 @@ object RawIoUtils {
 
     private const val DEFAULT_CHUNK_BYTES = 1024 * 1024 // ~1 MB
 
+    /**
+     * `RawBlockDevice.readAt()` HER ZAMAN sektore hizali bir ofset ister (bkz.
+     * RawBlockDevice.kt). NTFS/exFAT okuyucularinin (ExFatReader/NtfsReader)
+     * FAT girisi / MFT kaydi gibi KUCUK ve GENELDE HIZALANMAMIS alanlari
+     * okuyabilmesi icin: istenen [byteOffset, byteOffset+length) araligini
+     * kapsayan TAM sektorleri okuyup, sonra istenen alt-araligi keser.
+     */
+    fun readAligned(raw: RawBlockDevice, byteOffset: Long, length: Int): ByteArray {
+        val sectorSize = raw.blockSizeBytes.toLong()
+        val startSector = byteOffset / sectorSize
+        val endExclusive = byteOffset + length
+        val sectorCount = ((endExclusive - startSector * sectorSize) + sectorSize - 1) / sectorSize
+        val buf = ByteBuffer.allocate((sectorCount * sectorSize).toInt())
+        raw.readAt(startSector * sectorSize, buf)
+        buf.rewind()
+        val full = ByteArray(buf.remaining())
+        buf.get(full)
+        val startInBuf = (byteOffset - startSector * sectorSize).toInt()
+        return full.copyOfRange(startInBuf, startInBuf + length)
+    }
+
     /** `data`'yi (gerekirse pedallanarak) BUYUK PARCALAR halinde yazar. */
     fun writeBulk(raw: RawBlockDevice, startByteOffset: Long, data: ByteArray, chunkBytes: Int = DEFAULT_CHUNK_BYTES) {
         var offset = 0

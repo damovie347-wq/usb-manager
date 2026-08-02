@@ -26,25 +26,52 @@ object RawFileSystemSniffer {
 
     private const val SECTOR_SIZE = 512
 
+    /** Onaylanmis (boot-imzali + taninan) bir VBR'in konumu, ham sektor baytlari ve etiketi. */
+    data class VbrLocation(val vbrSectorLba: Long, val sectorBytes: ByteArray, val label: String)
+
     /** Taninirsa kisa bir etiket ("NTFS", "exFAT", "FAT32" vb.) dondurur, taninmazsa null. */
     fun sniffLabel(raw: RawBlockDevice): String? {
+        locateVbr(raw)?.let { return it.label }
+
+        // locateVbr() KESIN bir VBR dogrulayamadi (imza gecersiz/taninmiyor).
+        // Bu, SADECE bilgilendirme mesaji icin: en azindan MBR bolum TURU
+        // baytindan kaba bir tahmin dene. ExFatReader/NtfsReader BU ZAYIF
+        // tahmine GUVENMEZ -- onlar SADECE locateVbr()'in dondurdugu, gercekten
+        // dogrulanmis konumu kullanir.
+        if (raw.blockSizeBytes != SECTOR_SIZE) return null
+        val sector0 = readSector(raw, 0) ?: return null
+        if (!hasBootSignature(sector0)) return null
+        val partType = sector0[0x1BE + 4].toInt() and 0xFF
+        val partStartLba = readLeUInt32(sector0, 0x1BE + 8)
+        return if (partType != 0 && partStartLba in 1..0x0FFFFFFFL) partitionTypeLabel(partType) else null
+    }
+
+    /**
+     * ExFatReader/NtfsReader'in dosya sistemini ayristirmaya baslamadan once
+     * cagirdigi PAYLASILAN konum-bulma mantigi: sektor 0 dogrudan gecerli
+     * (boot-imzali + taninan) bir VBR mi (superfloppy duzeni, MBR yok)?
+     * Degilse sektor 0 bir MBR olabilir -- bu durumda ilk bolum girisinin
+     * isaret ettigi sektordeki VBR dogrulanir. Gercekten dogrulanmis/taninan
+     * bir VBR bulunamadiginda (ornegin bolum turu baytindan yapilan ZAYIF
+     * tahminlerde) `null` doner -- boylece okuyucular hicbir zaman
+     * dogrulanmamis bir konumdan ayristirmaya CALISMAZ.
+     */
+    fun locateVbr(raw: RawBlockDevice): VbrLocation? {
         if (raw.blockSizeBytes != SECTOR_SIZE) return null
         val sector0 = readSector(raw, 0) ?: return null
         if (!hasBootSignature(sector0)) return null
 
-        identifyVbr(sector0)?.let { return it }
+        identifyVbr(sector0)?.let { return VbrLocation(0, sector0, it) }
 
-        // Sektor 0 dogrudan bir VBR degilse, MBR olabilir: ilk bolum girisine bak.
+        // Sektor 0 taninan bir VBR degildi (ama boot-imzali): MBR olabilir.
         val partType = sector0[0x1BE + 4].toInt() and 0xFF
         val partStartLba = readLeUInt32(sector0, 0x1BE + 8)
-        if (partType != 0 && partStartLba in 1..0x0FFFFFFFL) {
-            val vbr = readSector(raw, partStartLba)
-            if (vbr != null && hasBootSignature(vbr)) {
-                identifyVbr(vbr)?.let { return it }
-            }
-            return partitionTypeLabel(partType)
-        }
-        return null
+        if (partType == 0 || partStartLba !in 1..0x0FFFFFFFL) return null
+
+        val vbr = readSector(raw, partStartLba) ?: return null
+        if (!hasBootSignature(vbr)) return null
+        val label = identifyVbr(vbr) ?: return null
+        return VbrLocation(partStartLba, vbr, label)
     }
 
     private fun identifyVbr(sector: ByteArray): String? {
