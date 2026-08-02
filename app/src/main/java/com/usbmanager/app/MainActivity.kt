@@ -1,5 +1,6 @@
 package com.usbmanager.app
 
+import android.content.Intent
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
@@ -49,7 +50,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         handleUsbAttachIntent()
     }
 
-    override fun onNewIntent(intent: android.content.Intent) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleUsbAttachIntent()
@@ -63,18 +64,38 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
      * (composite) bildirir; gercek Mass Storage sinifi (8) genellikle
      * INTERFACE seviyesindedir. Bu yuzden gercek suzme burada, interface
      * sinifina bakarak yapilir.
+     *
+     * KOK NEDEN ("tema degistirince USB sokulup cikarilmis gibi davraniyor"):
+     * `Activity.recreate()` (orn. tema degisiminde) `onCreate()`'i, Activity'nin
+     * O ANDA sahip oldugu Intent'i KORUYARAK tekrar calistirir. Bu fonksiyon
+     * eskiden intent'i "tuketmiyordu" -- yani kullanici Dosya Yoneticisi'ne
+     * bir USB-takildi bildirimiyle girdikten SONRA (mesela Ayarlar'a gecip)
+     * temayi degistirdiginde, `onCreate()` YENIDEN calisiyor, `intent.action`
+     * HALA ACTION_USB_DEVICE_ATTACHED oldugu icin bu fonksiyon USB izin/
+     * baglanti akisini SIFIRDAN tekrar tetikliyor ve ekrani zorla Dosya
+     * Yoneticisi'ne atiyordu -- goruntude USB'nin o an sokulup takilmis gibi
+     * gorunmesine yol aciyordu. Duzeltme: bir intent BIR KEZ islendikten
+     * sonra `setIntent()` ile "tuketilir" (ACTION_MAIN'e cevrilir), boylece
+     * sonraki her `onCreate()` (recreate dahil) onu bir daha islemez.
      */
     private fun handleUsbAttachIntent() {
-        val action = intent?.action ?: return
-        if (action != UsbManager.ACTION_USB_DEVICE_ATTACHED) return
+        val currentIntent = intent ?: return
+        if (currentIntent.action != UsbManager.ACTION_USB_DEVICE_ATTACHED) return
 
         val usbDevice = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+            currentIntent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
         } else {
             @Suppress("DEPRECATION")
-            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-        } ?: return
+            currentIntent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+        }
 
+        // Bu intent'i HEMEN "tuket" -- asagidaki izin kontrolu ASENKRON
+        // olabilir (sistem dialoglu), ama biz bu FIZIKSEL takilma olayini
+        // TEKRAR islemeyecegimizi simdiden garanti altina aliyoruz (bkz.
+        // yukaridaki KOK NEDEN notu).
+        setIntent(Intent(currentIntent).apply { action = Intent.ACTION_MAIN })
+
+        if (usbDevice == null) return
         val looksLikeMassStorage = (0 until usbDevice.interfaceCount).any { i ->
             usbDevice.getInterface(i).interfaceClass == android.hardware.usb.UsbConstants.USB_CLASS_MASS_STORAGE
         }
