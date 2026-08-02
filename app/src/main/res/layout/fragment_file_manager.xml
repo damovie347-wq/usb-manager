@@ -12,7 +12,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:scrollbars="none"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/text_file_system_badge"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
@@ -24,6 +24,25 @@
             android:textStyle="bold"
             tools:text="/storage/USB SanDisk" />
     </HorizontalScrollView>
+
+    <!-- NTFS/exFAT gibi ham okuyucuyla acilan birimler icin tespit edilen
+         dosya sistemi rozeti (FAT32/libaums'ta gizli -- bkz. ViewModel). -->
+    <TextView
+        android:id="@+id/text_file_system_badge"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_marginEnd="12dp"
+        android:gravity="center"
+        android:paddingHorizontal="8dp"
+        android:textColor="?attr/colorPrimary"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@id/scroll_path"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/scroll_path"
+        tools:text="NTFS"
+        tools:visibility="visible" />
 
     <View
         android:id="@+id/divider_path"
