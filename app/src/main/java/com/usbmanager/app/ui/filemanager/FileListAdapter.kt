@@ -5,20 +5,23 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.usbmanager.app.R
 import com.usbmanager.app.databinding.ItemFileBinding
-import me.jahnen.libaums.core.fs.UsbFile
-import java.text.SimpleDateFormat
 import java.util.Locale
 
+/**
+ * Artik dogrudan `UsbFile` (libaums) DEGIL, kaynak-bagimsiz [BrowseEntry]
+ * ile calisir -- boylece HEM FAT32 (libaums) HEM NTFS/exFAT (ExFatReader/
+ * NtfsReader) girisleri AYNI listede, AYNI sekilde gosterilebilir (bkz.
+ * FileManagerViewModel.kt basindaki BrowseEntry aciklamasi).
+ */
 class FileListAdapter(
-    private val onClick: (UsbFile) -> Unit,
-    private val onLongClick: (UsbFile) -> Boolean,
-    private val isSelected: (UsbFile) -> Boolean
+    private val onClick: (BrowseEntry) -> Unit,
+    private val onLongClick: (BrowseEntry) -> Boolean,
+    private val isSelected: (BrowseEntry) -> Boolean
 ) : RecyclerView.Adapter<FileListAdapter.VH>() {
 
-    private val items = mutableListOf<UsbFile>()
-    private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+    private val items = mutableListOf<BrowseEntry>()
 
-    fun submitList(newItems: List<UsbFile>) {
+    fun submitList(newItems: List<BrowseEntry>) {
         items.clear()
         items.addAll(newItems)
         notifyDataSetChanged()
@@ -30,35 +33,29 @@ class FileListAdapter(
     }
 
     override fun onBindViewHolder(holder: VH, position: Int) {
-        val file = items[position]
-        holder.bind(file)
+        holder.bind(items[position])
     }
 
     override fun getItemCount() = items.size
 
     inner class VH(private val binding: ItemFileBinding) : RecyclerView.ViewHolder(binding.root) {
-        fun bind(file: UsbFile) {
-            binding.textFileName.text = file.name
+        fun bind(entry: BrowseEntry) {
+            binding.textFileName.text = entry.name
 
-            // NOT: Klasor icin item sayisini burada ("file.listFiles().size")
-            // HESAPLAMIYORUZ; bu, her satir icin ayri bir USB okumasi (gercek
-            // donanim erisimi) tetikler ve listede COK sayida klasor varken
-            // ana thread'i uzun sure bloke ederek uygulamanin donmasina
-            // (ANR benzeri "asilmis" hisse) yol acabilirdi.
-            val meta = if (file.isDirectory) {
-                "Klasör"
-            } else {
-                formatSize(runCatching { file.length }.getOrDefault(0L))
-            }
+            // NOT: Klasor icin item sayisini burada HESAPLAMIYORUZ; bu, her
+            // satir icin ayri bir USB okumasi (gercek donanim erisimi)
+            // tetikler ve listede COK sayida klasor varken ana thread'i uzun
+            // sure bloke ederek uygulamanin donmasina yol acabilirdi.
+            val meta = if (entry.isDirectory) "Klasör" else formatSize(entry.sizeBytes)
             binding.textFileMeta.text = meta
 
             binding.imageIcon.setImageResource(
-                if (file.isDirectory) R.drawable.ic_folder else R.drawable.ic_iso
+                if (entry.isDirectory) R.drawable.ic_folder else R.drawable.ic_iso
             )
 
-            binding.root.alpha = if (isSelected(file)) 0.5f else 1f
-            binding.root.setOnClickListener { onClick(file) }
-            binding.root.setOnLongClickListener { onLongClick(file) }
+            binding.root.alpha = if (isSelected(entry)) 0.5f else 1f
+            binding.root.setOnClickListener { onClick(entry) }
+            binding.root.setOnLongClickListener { onLongClick(entry) }
         }
     }
 

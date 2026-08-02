@@ -24,8 +24,6 @@ import com.usbmanager.app.databinding.FragmentFileManagerBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import me.jahnen.libaums.core.fs.UsbFile
-import me.jahnen.libaums.core.fs.UsbFileInputStream
 import java.io.File
 
 class FileManagerFragment : Fragment() {
@@ -48,7 +46,7 @@ class FileManagerFragment : Fragment() {
 
         adapter = FileListAdapter(
             onClick = ::handleClick,
-            onLongClick = { file -> viewModel.toggleSelection(file); adapter.notifyDataSetChanged(); true },
+            onLongClick = { entry -> viewModel.toggleSelection(entry); adapter.notifyDataSetChanged(); true },
             isSelected = viewModel::isSelected
         )
         binding.recyclerFiles.layoutManager = LinearLayoutManager(requireContext())
@@ -96,15 +94,32 @@ class FileManagerFragment : Fragment() {
     }
 
     private fun observeViewModel() {
-        viewModel.currentDir.observe(viewLifecycleOwner) { dir ->
-            binding.textCurrentPath.text = dir?.let { buildPath(it) } ?: "/"
-            val connected = dir != null
+        viewModel.currentPath.observe(viewLifecycleOwner) { path ->
+            binding.textCurrentPath.text = path ?: "/"
+            val connected = path != null
             binding.textEmptyState.visibility = if (connected) View.GONE else View.VISIBLE
             binding.recyclerFiles.visibility = if (connected) View.VISIBLE else View.GONE
         }
 
         viewModel.files.observe(viewLifecycleOwner) { list ->
             adapter.submitList(list)
+        }
+
+        // NTFS/exFAT (ham okuyucu) modunda dosya ekleme/kopyalama/tasima/
+        // silme YOK (bkz. RawVolumeReader.kt basindaki BILINCLI KAPSAM
+        // SINIRI notu) -- bu yuzden ilgili butonlar bu modda GIZLENIR.
+        // Disk bilgisi hala calisir, o yuzden gizlenmiyor.
+        viewModel.readOnlyMode.observe(viewLifecycleOwner) { readOnly ->
+            val writeVisibility = if (readOnly) View.GONE else View.VISIBLE
+            binding.fabAdd.visibility = writeVisibility
+            binding.actionCopy.visibility = writeVisibility
+            binding.actionMove.visibility = writeVisibility
+            binding.actionDelete.visibility = writeVisibility
+        }
+
+        viewModel.fileSystemLabel.observe(viewLifecycleOwner) { label ->
+            binding.textFileSystemBadge.text = label ?: ""
+            binding.textFileSystemBadge.visibility = if (label != null) View.VISIBLE else View.GONE
         }
 
         viewModel.statusMessage.observe(viewLifecycleOwner) { msg ->
@@ -116,52 +131,42 @@ class FileManagerFragment : Fragment() {
             // depolama bulunamadı" gibi SABIT/genel bir yazidan baska hicbir
             // ipucu kalmiyordu. Artik ayni mesaj, baglanti kurulana kadar
             // EKRANDA KALICI olarak da gosteriliyor.
-            if (viewModel.currentDir.value == null) {
+            if (viewModel.currentPath.value == null) {
                 binding.textEmptyState.text = msg
             }
         }
     }
 
-    private fun buildPath(file: UsbFile): String {
-        val parts = mutableListOf<String>()
-        var current: UsbFile? = file
-        while (current != null && current.parent != null) {
-            parts.add(0, current.name)
-            current = current.parent
-        }
-        return "/" + parts.joinToString("/")
-    }
-
-    private fun handleClick(file: UsbFile) {
-        if (viewModel.isSelected(file)) {
-            viewModel.toggleSelection(file)
+    private fun handleClick(entry: BrowseEntry) {
+        if (viewModel.isSelected(entry)) {
+            viewModel.toggleSelection(entry)
             adapter.notifyDataSetChanged()
             return
         }
-        if (file.isDirectory) {
-            viewModel.openDirectory(file)
+        if (entry.isDirectory) {
+            viewModel.openDirectory(entry)
         } else {
-            openFile(file)
+            openFile(entry)
         }
     }
 
-    private fun openFile(file: UsbFile) {
-        val ext = file.name.substringAfterLast('.', "").lowercase()
+    private fun openFile(entry: BrowseEntry) {
+        val ext = entry.name.substringAfterLast('.', "").lowercase()
         val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
 
         when {
-            mime.startsWith("image/") -> previewImageInApp(file)
-            mime.startsWith("video/") || mime.startsWith("audio/") -> openWithExternalApp(file, mime)
-            else -> openWithExternalApp(file, mime)
+            mime.startsWith("image/") -> previewImageInApp(entry)
+            mime.startsWith("video/") || mime.startsWith("audio/") -> openWithExternalApp(entry, mime)
+            else -> openWithExternalApp(entry, mime)
         }
     }
 
     /** Fotograflar icin basit, uygulama-ici onizleme (harici uygulamaya gerek yok). */
-    private fun previewImageInApp(file: UsbFile) {
+    private fun previewImageInApp(entry: BrowseEntry) {
         viewLifecycleOwner.lifecycleScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 runCatching {
-                    UsbFileInputStream(file).use { BitmapFactory.decodeStream(it) }
+                    viewModel.openInputStreamFor(entry)?.use { BitmapFactory.decodeStream(it) }
                 }.getOrNull()
             }
             if (bitmap == null) {
@@ -177,15 +182,14 @@ class FileManagerFragment : Fragment() {
     }
 
     /** Video/muzik/diger dosyalar icin: onbellege kopyala -> FileProvider -> "Birlikte Aç". */
-    private fun openWithExternalApp(file: UsbFile, mime: String) {
+    private fun openWithExternalApp(entry: BrowseEntry, mime: String) {
         viewLifecycleOwner.lifecycleScope.launch {
             val cachedFile = withContext(Dispatchers.IO) {
                 runCatching {
+                    val input = viewModel.openInputStreamFor(entry) ?: return@runCatching null
                     val sharedDir = File(requireContext().cacheDir, "shared").apply { mkdirs() }
-                    val outFile = File(sharedDir, file.name)
-                    UsbFileInputStream(file).use { input ->
-                        outFile.outputStream().use { output -> input.copyTo(output) }
-                    }
+                    val outFile = File(sharedDir, entry.name)
+                    input.use { ins -> outFile.outputStream().use { output -> ins.copyTo(output) } }
                     outFile
                 }.getOrNull()
             } ?: run {
@@ -216,8 +220,7 @@ class FileManagerFragment : Fragment() {
             .setPositiveButton("Oluştur") { _, _ ->
                 val name = input.text.toString().trim()
                 if (name.isNotEmpty()) {
-                    runCatching { viewModel.currentDir.value?.createDirectory(name) }
-                    viewModel.refresh()
+                    viewModel.createFolder(name)
                 }
             }
             .setNegativeButton("İptal", null)
@@ -225,12 +228,12 @@ class FileManagerFragment : Fragment() {
     }
 
     private fun showMoveTargetDialog() {
-        val targets = viewModel.siblingDirectories()
+        val targets = viewModel.siblingDirectoryNames()
         if (targets.isEmpty()) {
             Snackbar.make(binding.root, "Bu klasörde hedef alt klasör yok", Snackbar.LENGTH_SHORT).show()
             return
         }
-        val names = targets.map { it.name }.toTypedArray()
+        val names = targets.toTypedArray()
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Taşınacak klasörü seçin")
             .setItems(names) { _, which -> viewModel.moveSelectedTo(targets[which]) }
@@ -250,9 +253,15 @@ class FileManagerFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val info = viewModel.diskInfo()
             val message = if (info != null) {
-                "Kapasite: ${info.capacityBytes / (1024 * 1024)} MB\n" +
-                    "Boş: ${info.freeBytes / (1024 * 1024)} MB\n" +
-                    "Kullanılan: ${info.occupiedBytes / (1024 * 1024)} MB"
+                if (info.freeBytes == 0L && info.occupiedBytes == 0L && info.capacityBytes > 0L) {
+                    // NTFS/exFAT ham okuyucuda kullanilan alan hesaplanamadiysa
+                    // (bkz. RawVolumeReader.kt) sadece kapasiteyi gosteriyoruz.
+                    "Kapasite: ${info.capacityBytes / (1024 * 1024)} MB"
+                } else {
+                    "Kapasite: ${info.capacityBytes / (1024 * 1024)} MB\n" +
+                        "Boş: ${info.freeBytes / (1024 * 1024)} MB\n" +
+                        "Kullanılan: ${info.occupiedBytes / (1024 * 1024)} MB"
+                }
             } else "Disk bilgisi alınamadı"
 
             MaterialAlertDialogBuilder(requireContext())
@@ -268,4 +277,3 @@ class FileManagerFragment : Fragment() {
         _binding = null
     }
 }
-
