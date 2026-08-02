@@ -153,6 +153,18 @@ object ExFatFormatter {
         return (bytes + SECTOR_SIZE - 1) / SECTOR_SIZE
     }
 
+    /**
+     * KRITIK PERFORMANS DUZELTMESI: bu fonksiyon ONCEDEN 12 sektorluk
+     * onyukleme bolgesini 23 AYRI readAt/writeAt cagrisiyla (sektor 0 icin 1
+     * yazma, sektor 1-8 icin 8 yazma, sektor 9-10 icin 2 yazma, checksum
+     * icin sektor 0-10'u GERI OKUMAK icin 11 okuma, sektor 11 icin 1 yazma)
+     * olusturuyordu -- her biri kendi USB komut/yanit tur-suresiyle,
+     * kullanicilarin bildirdigi "NTFS/exFAT formatlama 15-20 saniye"
+     * yavasliginin exFAT tarafindaki katkisiydi. Artik butun 12 sektorluk
+     * bolge TEK bir bellek arabelleginde olusturuluyor, checksum bu
+     * arabellekten (cihazdan GERI OKUMADAN) hesaplaniyor, ve hepsi TEK bir
+     * writeAt() cagrisiyla diske yaziliyor.
+     */
     private fun writeBootRegion(
         raw: RawBlockDevice,
         regionStartSector: Long,
@@ -165,6 +177,8 @@ object ExFatFormatter {
         sectorsPerClusterShift: Int,
         volumeSerial: Int
     ) {
+        val region = ByteArray(12 * SECTOR_SIZE) // ByteArray varsayilani zaten tamami sifir
+
         // --- Sektor 0: Ana Boot Sektoru (Volume Boot Record) ---
         val boot = ByteBuffer.allocate(SECTOR_SIZE).order(ByteOrder.LITTLE_ENDIAN)
         boot.put(byteArrayOf(0xEB.toByte(), 0x76, 0x90.toByte()))   // JumpBoot
@@ -190,49 +204,37 @@ object ExFatFormatter {
         boot.position(0x1FE)
         boot.put(0x55); boot.put(0xAA.toByte())                     // BootSignature
         boot.rewind()
-        raw.writeAt(regionStartSector * SECTOR_SIZE, boot)
+        boot.get(region, 0, SECTOR_SIZE)
 
         // --- Sektor 1..8: Genisletilmis Boot Sektorleri (bos + uzatilmis imza) ---
         for (i in 1..8) {
-            val ext = ByteBuffer.allocate(SECTOR_SIZE).order(ByteOrder.LITTLE_ENDIAN)
-            ext.position(0x1FC)
-            ext.putInt(0xAA550000.toInt())
-            ext.rewind()
-            raw.writeAt((regionStartSector + i) * SECTOR_SIZE, ext)
+            val off = i * SECTOR_SIZE + 0x1FC
+            region[off + 2] = 0x55
+            region[off + 3] = 0xAA.toByte()
         }
 
-        // --- Sektor 9: OEM Parametreleri (kullanilmiyor -> tamami sifir) ---
-        raw.writeAt((regionStartSector + 9) * SECTOR_SIZE, ByteBuffer.allocate(SECTOR_SIZE))
+        // --- Sektor 9: OEM Parametreleri, Sektor 10: Ayrilmis -> zaten sifir ---
 
-        // --- Sektor 10: Ayrilmis (Reserved) -> tamami sifir ---
-        raw.writeAt((regionStartSector + 10) * SECTOR_SIZE, ByteBuffer.allocate(SECTOR_SIZE))
-
-        // --- Sektor 11: Boot Checksum -> sektor 0..10'un checksum'i, sektor sonuna kadar tekrarlanir ---
-        // Az once yazdigimiz sektorleri checksum icin GERI OKUYORUZ (VolumeFlags
-        // ve PercentInUse alanlari spesifikasyon geregi HESABA KATILMAZ).
-        val elevenSectors = ByteArray(11 * SECTOR_SIZE)
-        val readBuf = ByteBuffer.allocate(SECTOR_SIZE)
-        for (s in 0 until 11) {
-            readBuf.clear()
-            raw.readAt((regionStartSector + s) * SECTOR_SIZE, readBuf)
-            readBuf.rewind()
-            readBuf.get(elevenSectors, s * SECTOR_SIZE, SECTOR_SIZE)
-        }
-        val checksum = computeChecksum(elevenSectors, skipOffsets = intArrayOf(106, 107, 112))
+        // --- Sektor 11: Boot Checksum -> sektor 0..10'un checksum'i, sektor sonuna
+        // kadar tekrarlanir (VolumeFlags ve PercentInUse alanlari spesifikasyon
+        // geregi HESABA KATILMAZ). Az once BELLEKTE olusturdugumuz baytlar
+        // uzerinden hesaplaniyor -- cihazdan GERI OKUMAYA gerek YOK.
+        val checksum = computeChecksum(region.copyOfRange(0, 11 * SECTOR_SIZE), skipOffsets = intArrayOf(106, 107, 112))
         val checksumSector = ByteBuffer.allocate(SECTOR_SIZE).order(ByteOrder.LITTLE_ENDIAN)
         while (checksumSector.remaining() > 0) checksumSector.putInt(checksum)
         checksumSector.rewind()
-        raw.writeAt((regionStartSector + 11) * SECTOR_SIZE, checksumSector)
+        checksumSector.get(region, 11 * SECTOR_SIZE, SECTOR_SIZE)
+
+        raw.writeAt(regionStartSector * SECTOR_SIZE, ByteBuffer.wrap(region))
     }
 
+    /** Yedek onyukleme bolgesini TEK bir okuma + TEK bir yazma ile kopyalar (12 ayri sektor yerine). */
     private fun copyRegion(raw: RawBlockDevice, fromSector: Long, toSector: Long, sectorCount: Long) {
-        val buf = ByteBuffer.allocate(SECTOR_SIZE)
-        for (i in 0 until sectorCount) {
-            buf.clear()
-            raw.readAt((fromSector + i) * SECTOR_SIZE, buf)
-            buf.rewind()
-            raw.writeAt((toSector + i) * SECTOR_SIZE, buf)
-        }
+        val totalBytes = (sectorCount * SECTOR_SIZE).toInt()
+        val buf = ByteBuffer.allocate(totalBytes)
+        raw.readAt(fromSector * SECTOR_SIZE, buf)
+        buf.rewind()
+        raw.writeAt(toSector * SECTOR_SIZE, buf)
     }
 
     /**

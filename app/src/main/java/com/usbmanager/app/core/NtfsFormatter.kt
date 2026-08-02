@@ -18,13 +18,15 @@ import kotlin.random.Random
  * (Master File Table + oznitelik/attribute kayitlari + fixup/Update
  * Sequence Array mekanizmasi), asagidaki BILINCLI KAPSAM SINIRLARI vardir:
  *
- *  - $LogFile SIFIRLA doldurulur (gercek bir islem/transaction log
- *    "restart area" yapisi YAZILMAZ); bunun yerine $Volume'un
- *    VolumeFlags alaninda "dirty" biti KASITLI OLARAK isaretlenir, boylece
- *    Windows/chkdsk ilk baglamada $LogFile'i kendisi guvenle ilklendirir.
- *    Bu, gercek dunyada minimal NTFS bicimlendiricilerin kullandigi bilinen
- *    ve guvenli bir yontemdir; tasinabilir bir USB bellekte Windows bunun
- *    icin erisimi engellemez.
+ *  - $LogFile'in SADECE basindaki birkac KB'i sifirlanir (gercek bir
+ *    islem/transaction log "restart area" yapisi YAZILMAZ, ve alanin
+ *    TAMAMI da sifirlanmaz -- bkz. format() icindeki KRITIK PERFORMANS
+ *    DUZELTMESI notu); bunun yerine $Volume'un VolumeFlags alaninda
+ *    "dirty" biti KASITLI OLARAK isaretlenir, boylece Windows/chkdsk ilk
+ *    baglamada $LogFile'i kendisi guvenle ilklendirir. Bu, gercek dunyada
+ *    minimal NTFS bicimlendiricilerin kullandigi bilinen ve guvenli bir
+ *    yontemdir; tasinabilir bir USB bellekte Windows bunun icin erisimi
+ *    engellemez.
  *  - $Secure sistem dosyasi, $SDS akisini BOS birakir; $SDH/$SII arama
  *    indeksleri YAZILMAZ. Butun kayitlarimiz security_id=0 (guvenlik
  *    tanimlayicisi yok) kullandigi icin bu, normal calisirken hic
@@ -234,8 +236,24 @@ object NtfsFormatter {
         writeClusterData(raw, mftMirrStart, mftMirrClusters, mftMirrRegion)
         onProgress(65)
 
-        // --- 5) $LogFile: SIFIRLA doldurulur (bkz. yukaridaki kapsam notu) ---
-        zeroFillClusters(raw, logFileStart, logFileClusters) { pct ->
+        // --- 5) $LogFile: SADECE guvenlik icin basindaki birkac kume sifirlanir
+        // (bkz. dosya basindaki kapsam notu VE buildVolumeInformation'daki
+        // KASITLI "dirty" biti). $LogFile'in TAMAMINI (2-32 MB) sifirlamak
+        // GEREKSIZDI: birim "dirty" isaretlendigi icin Windows/chkdsk zaten
+        // ilk baglamada $LogFile'i KENDISI yeniden ilklendirir -- yani o
+        // buyuk yazmanin sonucu dogrudan cikarilip atiliyordu. Basta
+        // sadece birkac kumeyi sifirlamak, olasi bir onceki dosya
+        // sisteminden kalma verinin YANLISLIKLA gecerli bir "restart page"
+        // imzasi gibi GORUNMESINI engellemek icin yeterlidir.
+        //
+        // KRITIK PERFORMANS DUZELTMESI: kullanicilarin bildirdigi "NTFS/exFAT
+        // formatlama 15-20 saniye suruyor" sorununun ASIL kaynagi buydu --
+        // 16-32 MB'lik gereksiz bir sifirlama, bu ozel USB-uzerinden-SCSI
+        // yiginda (Windows'un cekirdek surucusune kiyasla komut basina cok
+        // daha yuksek sabit gecikme ile) tek basina saniyeler suruyordu.
+        // Simdi sadece birkac KB yazildigi icin bu adim ARTIK ANLIK.
+        val logFileSafetyClusters = minOf(logFileClusters, clustersFor(16L * 1024))
+        zeroFillClusters(raw, logFileStart, logFileSafetyClusters) { pct ->
             onProgress(65 + (pct * 15 / 100))
         }
 
