@@ -26,7 +26,7 @@
     </HorizontalScrollView>
 
     <!-- NTFS/exFAT gibi ham okuyucuyla acilan birimler icin tespit edilen
-         dosya sistemi rozeti (FAT32/libaums'ta gizli -- bkz. ViewModel). -->
+         dosya sistemi rozeti (FAT32/libaums'ta gizli, bkz. ViewModel). -->
     <TextView
         android:id="@+id/text_file_system_badge"
         android:layout_width="wrap_content"
