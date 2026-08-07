@@ -30,4 +30,17 @@ interface RawBlockDevice {
 
     /** `byteOffset` HER ZAMAN blockSizeBytes'a hizali olmalidir. */
     fun writeAt(byteOffset: Long, buffer: ByteBuffer)
+
+    /**
+     * Baglantiyi ve USB arabirimini serbest birakir.
+     *
+     * NOT: bu metod SONRADAN eklendi -- ExFatReader/NtfsReader gibi, elinde
+     * SADECE arayuz tipinde (`RawBlockDevice`) bir referans tutan ve
+     * calisma omru boyunca (Dosya Yoneticisi'nde gezinme suresince) kendi
+     * kendini kapatmasi gereken siniflar icin gerekliydi. Oncesinde close()
+     * SADECE somut `ScsiRawBlockDevice` sinifinda tanimliydi; arayuz
+     * uzerinden erisilemedigi icin derleme hatasi veriyordu (bkz. gercek
+     * CI derlemesiyle yakalanan "Unresolved reference: close" hatasi).
+     */
+    fun close()
 }

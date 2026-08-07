@@ -116,7 +116,7 @@ class ScsiRawBlockDevice private constructor(
     }
 
     /** Bağlantıyı ve USB arabirimini serbest bırakır. İşlem bitince MUTLAKA çağrılmalı. */
-    fun close() {
+    override fun close() {
         runCatching { connection.releaseInterface(usbInterface) }
         runCatching { connection.close() }
     }
